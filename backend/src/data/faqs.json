@@ -1,0 +1,51 @@
+[
+  {
+    "id": "faq-1",
+    "category": "app_features",
+    "topic": "Add Expense",
+    "question": "How do I add or track a new expense in PennyPal?",
+    "answer": "To add a new expense in PennyPal, click on the 'Add Expense' button on your dashboard, enter the amount, select a category (such as Food, Transport, Bills), choose the date, and save. You can also upload a receipt photo to automatically extract expense details!"
+  },
+  {
+    "id": "faq-2",
+    "category": "app_features",
+    "topic": "Receipt Scanning OCR",
+    "question": "How does receipt scanning work in PennyPal?",
+    "answer": "PennyPal uses AI-powered OCR (Optical Character Recognition) to scan your receipt images or PDFs. When you upload a receipt, PennyPal automatically extracts the merchant name, date, total amount, and suggested category so you don't have to type it manually."
+  },
+  {
+    "id": "faq-3",
+    "category": "app_features",
+    "topic": "Budget Limits",
+    "question": "How can I set monthly spending budgets in PennyPal?",
+    "answer": "You can set monthly budget limits for overall spending or specific categories in your PennyPal settings/budget page. PennyPal will monitor your expenses and notify you when you approach or exceed your budget limits."
+  },
+  {
+    "id": "faq-4",
+    "category": "financial_concepts",
+    "topic": "50/30/20 Rule",
+    "question": "What is the 50/30/20 budgeting rule?",
+    "answer": "The 50/30/20 rule is a simple budgeting framework: Allocate 50% of your net income to Needs (rent, groceries, utilities), 30% to Wants (dining out, hobbies, streaming), and 20% to Savings or debt repayment."
+  },
+  {
+    "id": "faq-5",
+    "category": "financial_concepts",
+    "topic": "Emergency Fund",
+    "question": "What is an emergency fund and how much should I save?",
+    "answer": "An emergency fund is money set aside for unexpected expenses like medical emergencies, car repairs, or sudden job loss. A good benchmark is saving 3 to 6 months' worth of essential living expenses in an easily accessible high-yield savings account."
+  },
+  {
+    "id": "faq-6",
+    "category": "financial_concepts",
+    "topic": "Debt Payoff Strategies",
+    "question": "What are the best methods to pay off debt?",
+    "answer": "Two popular methods are: 1) Debt Avalanche - Pay off debts with the highest interest rate first to save the most money. 2) Debt Snowball - Pay off smallest debt balances first for quick psychological wins to build momentum."
+  },
+  {
+    "id": "faq-7",
+    "category": "financial_concepts",
+    "topic": "Tracking Small Purchases",
+    "question": "Why is tracking small daily expenses important?",
+    "answer": "Small daily purchases (like coffee, snacks, or impulse buys) add up significantly over a month—a phenomenon known as the 'Latte Factor'. Tracking them helps you spot hidden leaks in your cash flow."
+  }
+]
