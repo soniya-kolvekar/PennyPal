@@ -5,7 +5,9 @@ const {
 const {
     createImportBatch,
 } = require("../services/importBatchService");
-
+const {
+    categorizeTransaction
+} = require("../services/categorizationLlmService");
 async function analyzeStatement(req, res, next) {
     try {
         const { text, fileName } = req.body;
@@ -58,6 +60,50 @@ async function analyzeStatement(req, res, next) {
     }
 }
 
+async function categorizeTransactions(req, res, next) {
+    try {
+        const { transactions } = req.body;
+
+        if (!Array.isArray(transactions)) {
+            return res.status(400).json({
+                success: false,
+                message: "transactions must be an array."
+            });
+        }
+
+        if (transactions.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "At least one transaction is required."
+            });
+        }
+
+        const categorizedTransactions = [];
+
+        for (const transaction of transactions) {
+            const result = await categorizeTransaction(transaction);
+
+            categorizedTransactions.push({
+                ...transaction,
+                category: result.category,
+                categoryConfidence: result.confidence,
+                categoryReason: result.reason,
+                categorySource: result.source,
+                updatedAt: new Date().toISOString()
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Transactions categorized successfully.",
+            transactions: categorizedTransactions
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     analyzeStatement,
+    categorizeTransactions
 };

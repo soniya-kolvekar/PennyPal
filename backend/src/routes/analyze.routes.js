@@ -10,4 +10,10 @@ router.post(
     analyzeController.analyzeStatement
 );
 
+router.post(
+    "/categorize",
+    authMiddleware,
+    analyzeController.categorizeTransactions
+);
+
 module.exports = router;

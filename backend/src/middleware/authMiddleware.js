@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 const { initializeApp, getApps } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 
@@ -40,5 +39,3 @@ const authMiddleware = async (req, res, next) => {
 };
 
 module.exports = authMiddleware;
-=======
->>>>>>> 2e56f9d0afadb4d295d11bf6ae6b2eef43decb15
