@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -26,8 +26,23 @@ import {
   ChevronDown,
   FileSpreadsheet,
   Building2,
-  Heart
+  Heart,
+  AlertTriangle,
+  Loader2,
+  Database,
+  Link2
 } from "lucide-react";
+import { extractTextFromFile } from "../../../lib/statementExtractor";
+import { getAuthToken } from "../../../lib/auth";
+import { db } from "../../../lib/db";
+import {
+  stageImportBatch,
+  confirmImportBatch,
+  cancelImportBatch,
+  detectPossibleDuplicates,
+  getTransactions,
+  getVaultId
+} from "../../../lib/vault";
 
 const INITIAL_TRANSACTIONS = [
   { id: "1", date: "Sep 01", desc: "SWIGGY FOOD DELIVERY", amount: 450, type: "Expense", category: "Food & Dining" },
@@ -57,6 +72,15 @@ const CATEGORIES = [
   "Other"
 ];
 
+const SOURCES = [
+  { value: "bank_statement", label: "Bank Statement" },
+  { value: "manual_entry", label: "Manual Entry" },
+  { value: "upi", label: "UPI (Google Pay / PhonePe)" },
+  { value: "credit_card", label: "Credit Card" },
+  { value: "cash", label: "Cash" },
+  { value: "other", label: "Other" }
+];
+
 function getCategoryIcon(category) {
   switch (category) {
     case "Food & Dining":
@@ -82,46 +106,181 @@ export default function UploadPage() {
   const [step, setStep] = useState("upload"); // 'upload' | 'analyzing' | 'review' | 'success'
   const [fileName, setFileName] = useState("");
   const [progress, setProgress] = useState(0);
-  const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
+  const [transactions, setTransactions] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
-  
+  const [currentBatchId, setCurrentBatchId] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [statusMessage, setStatusMessage] = useState("Extracting statement text...");
+  const [duplicateMatches, setDuplicateMatches] = useState({});
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [activeVaultTransactions, setActiveVaultTransactions] = useState([]);
+  const [showActiveVaultDrawer, setShowActiveVaultDrawer] = useState(false);
+
+  const loadActiveTransactions = () => {
+    getTransactions({ status: "active" })
+      .then((active) => {
+        setActiveVaultTransactions(active || []);
+      })
+      .catch(() => {
+        setActiveVaultTransactions([]);
+      });
+  };
+
+  useEffect(() => {
+    let isSubscribed = true;
+    getTransactions({ status: "active" })
+      .then((active) => {
+        if (isSubscribed) {
+          setActiveVaultTransactions(active || []);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, []);
+
   // Modals
   const [editingTx, setEditingTx] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newTx, setNewTx] = useState({
-    date: "Sep 20",
+    date: new Date().toISOString().split("T")[0],
     desc: "",
     amount: "",
     type: "Expense",
-    category: "Shopping"
+    category: "Shopping",
+    source: "manual_entry"
   });
 
   const fileInputRef = useRef(null);
 
-  // Trigger file simulation
-  const handleFileSelect = (file) => {
+  // Real client-side extraction and Express backend processing
+  const handleFileSelect = async (file) => {
     if (!file) return;
-    setFileName(file.name || "September_Statement.pdf");
+    setFileName(file.name || "statement.pdf");
+    setErrorMessage("");
+
+    const token = getAuthToken();
+    if (!token) {
+      setErrorMessage("Please sign in first so your transactions can be securely saved to your local vault.");
+      setStep("upload");
+      return;
+    }
+
     setStep("analyzing");
-    setProgress(0);
+    setProgress(15);
+    setStatusMessage("Extracting text locally in browser...");
+
+    try {
+      // 1. Client-side extraction (PDF.js / FileReader)
+      const extractedText = await extractTextFromFile(file);
+      setProgress(40);
+      setStatusMessage("Sending to secure processing gateway...");
+
+      // 2. Call Express backend
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
+
+      const res = await fetch(`${backendUrl}/api/analyze/statement`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          text: extractedText,
+          fileName: file.name,
+        }),
+      });
+
+      const data = await res.json();
+      setProgress(75);
+      setStatusMessage("Saving candidates into local IndexedDB...");
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to analyze bank statement.");
+      }
+
+      const candidateTransactions = data.transactions || [];
+      const batch = data.batch || { id: crypto.randomUUID(), fileName: file.name };
+      setCurrentBatchId(batch.id);
+
+      // 3. Stage candidate transactions in IndexedDB as pending_review
+      await stageImportBatch(batch, candidateTransactions);
+
+      // 4. Run duplicate detection against active transactions in IndexedDB
+      const duplicateScores = await detectPossibleDuplicates(candidateTransactions);
+      const dupMap = {};
+      duplicateScores.forEach((d) => {
+        if (d.isDuplicateCandidate && d.possibleDuplicate) {
+          dupMap[d.candidate.id] = d;
+        }
+      });
+      setDuplicateMatches(dupMap);
+
+      // Format for the review UI
+      const formattedForUI = candidateTransactions.map((tx) => ({
+        id: tx.id,
+        date: tx.date,
+        desc: tx.merchant || tx.originalDescription || "Unknown Transaction",
+        amount: Math.abs(Number(tx.amount)),
+        type: tx.type === "income" ? "Income" : "Expense",
+        category: tx.category || "Other",
+        source: tx.source || "bank_statement",
+      }));
+
+      setTransactions(formattedForUI);
+      setProgress(100);
+      setTimeout(() => setStep("review"), 500);
+    } catch (err) {
+      console.error("Upload & analysis error:", err);
+      setErrorMessage(err.message || "Something went wrong while processing your statement.");
+      setStep("upload");
+    }
   };
 
-  // Simulate analysis progress
-  useEffect(() => {
-    if (step === "analyzing") {
-      const interval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            setTimeout(() => setStep("review"), 500);
-            return 100;
-          }
-          return prev + 12;
-        });
-      }, 250);
-      return () => clearInterval(interval);
+  // Confirm import: Promote pending transactions to active in IndexedDB
+  const handleConfirmImport = async () => {
+    try {
+      setIsConfirming(true);
+      const canonical = transactions.map((t) => ({
+        id: t.id,
+        date: t.date,
+        merchant: t.desc,
+        amount: Number(t.amount),
+        type: t.type.toLowerCase() === "income" ? "income" : "expense",
+        category: t.category,
+        source: t.source || "bank_statement",
+        reconciledWith: t.reconciledWith || null,
+      }));
+
+      const batchId = currentBatchId || crypto.randomUUID();
+      await confirmImportBatch(batchId, canonical);
+      await loadActiveTransactions();
+      setStep("success");
+    } catch (err) {
+      console.error("Confirm import error:", err);
+      alert("Failed to confirm import: " + err.message);
+    } finally {
+      setIsConfirming(false);
     }
-  }, [step]);
+  };
+
+  // Cancel import: Cleanly remove pending candidates from IndexedDB
+  const handleCancelImport = async () => {
+    try {
+      if (currentBatchId) {
+        await cancelImportBatch(currentBatchId);
+      }
+      setTransactions([]);
+      setDuplicateMatches({});
+      setCurrentBatchId(null);
+      setStep("upload");
+    } catch (err) {
+      console.error("Cancel import error:", err);
+      setStep("upload");
+    }
+  };
 
   // Drag and drop handlers
   const handleDragOver = (e) => {
@@ -152,29 +311,117 @@ export default function UploadPage() {
     setEditingTx(null);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
+    try {
+      await db.transactions.delete(id);
+    } catch {}
     setTransactions((prev) => prev.filter((t) => t.id !== id));
+    setDuplicateMatches((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
-  const handleAddTransaction = (e) => {
+  const handleReconcile = (candidateId, matchedActiveId) => {
+    setTransactions((prev) =>
+      prev.map((t) =>
+        t.id === candidateId
+          ? { ...t, reconciledWith: matchedActiveId, isReconciled: true }
+          : t
+      )
+    );
+  };
+
+  const handleDismissDuplicate = (candidateId) => {
+    setDuplicateMatches((prev) => {
+      const next = { ...prev };
+      delete next[candidateId];
+      return next;
+    });
+  };
+
+  const handleAddTransaction = async (e) => {
     e.preventDefault();
     if (!newTx.desc || !newTx.amount) return;
+
+    // Ensure currentBatchId exists for staging
+    const batchId = currentBatchId || crypto.randomUUID();
+    if (!currentBatchId) {
+      setCurrentBatchId(batchId);
+      await stageImportBatch({ id: batchId, fileName: fileName || "Manual Entry" }, []);
+    }
+
     const created = {
-      id: Date.now().toString(),
-      date: newTx.date || "Sep 20",
-      desc: newTx.desc,
+      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      date: newTx.date || new Date().toISOString().split("T")[0],
+      desc: newTx.desc.trim(),
       amount: parseFloat(newTx.amount) || 0,
       type: newTx.type,
-      category: newTx.category
+      category: newTx.category,
+      source: newTx.source || "manual_entry",
+      importBatchId: batchId,
     };
-    setTransactions((prev) => [created, ...prev]);
+
+    // Stage in IndexedDB with status: 'pending_review' so it NEVER shows as active before confirmation!
+    try {
+      const vaultId = getVaultId();
+      await db.transactions.put({
+        id: created.id,
+        vaultId,
+        date: created.date,
+        merchant: created.desc,
+        amount: created.amount,
+        type: created.type.toLowerCase(),
+        category: created.category,
+        source: created.source,
+        status: "pending_review",
+        reconciledWith: null,
+        originalDescription: created.desc,
+        originalMerchant: created.desc,
+        importBatchId: batchId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn("Staging manual transaction error:", err);
+    }
+
+    const updatedList = [created, ...transactions];
+    setTransactions(updatedList);
+
+    // Run reconciliation & duplicate detection against active transactions + batch
+    try {
+      const candidatesForDetection = updatedList.map((t) => ({
+        id: t.id,
+        date: t.date,
+        merchant: t.desc,
+        amount: t.amount,
+        type: t.type.toLowerCase(),
+        category: t.category,
+        source: t.source,
+      }));
+
+      const dupChecks = await detectPossibleDuplicates(candidatesForDetection);
+      const dupMap = {};
+      dupChecks.forEach((d) => {
+        if (d.isDuplicateCandidate && d.possibleDuplicate) {
+          dupMap[d.candidate.id] = d;
+        }
+      });
+      setDuplicateMatches(dupMap);
+    } catch (err) {
+      console.warn("Duplicate check error:", err);
+    }
+
     setShowAddModal(false);
     setNewTx({
-      date: "Sep 20",
+      date: new Date().toISOString().split("T")[0],
       desc: "",
       amount: "",
       type: "Expense",
-      category: "Shopping"
+      category: "Shopping",
+      source: "manual_entry"
     });
   };
 
@@ -251,9 +498,24 @@ export default function UploadPage() {
                 className="h-7 w-auto object-contain"
               />
             </div>
-            <p className="text-base sm:text-lg text-[#5B3F91]/80 max-w-xl font-medium mb-8">
+            <p className="text-base sm:text-lg text-[#5B3F91]/80 max-w-xl font-medium mb-6">
               Upload your bank statement and Penny will turn it into an easy-to-understand spending history.
             </p>
+
+            {errorMessage && (
+              <div className="w-full max-w-xl mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-rose-700 text-sm font-semibold shadow-xs animate-fade-in">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-rose-600" />
+                <p className="flex-1 text-left">{errorMessage}</p>
+                <button
+                  type="button"
+                  onClick={() => setErrorMessage("")}
+                  className="p-1 hover:bg-rose-100 rounded-lg text-rose-500 transition-colors"
+                  title="Dismiss"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
             {/* Layout Grid: Upload Card + Penny Companion */}
             <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
@@ -401,9 +663,12 @@ export default function UploadPage() {
               />
             </div>
 
-            <h3 className="font-handwritten text-3xl font-bold text-[#5B3F91] mb-4">
+            <h3 className="font-handwritten text-3xl font-bold text-[#5B3F91] mb-1">
               Penny is reading your statement...
             </h3>
+            <p className="text-xs sm:text-sm font-semibold text-[#8064C8] mb-5 animate-pulse">
+              {statusMessage}
+            </p>
 
             {/* Analysis Checklist */}
             <div className="w-full p-6 bg-white/80 rounded-2xl border border-[#EAE3FA] shadow-md flex flex-col gap-3 text-left">
@@ -461,16 +726,15 @@ export default function UploadPage() {
           <div className="flex flex-col w-full animate-fade-in">
             
             {/* Review Header */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <h1 className="font-handwritten text-3xl sm:text-4xl font-bold text-[#5B3F91]">
                     Penny found these transactions
                   </h1>
-                 
                 </div>
                 <p className="text-xs sm:text-sm font-semibold text-[#5B3F91]/70">
-                  {transactions.length} transactions found from <span className="text-[#8064C8] font-bold">{fileName || "September_Statement.pdf"}</span>
+                  {transactions.length} transactions found from <span className="text-[#8064C8] font-bold">{fileName || "Manual Entry"}</span>
                 </p>
               </div>
 
@@ -483,6 +747,52 @@ export default function UploadPage() {
                 <span>Add missing transaction</span>
               </button>
             </div>
+
+            {/* Active Vault Ledger Drawer (Explains why duplicates match) */}
+            {activeVaultTransactions.length > 0 && (
+              <div className="mb-6 p-4 bg-white/90 rounded-2xl border border-[#EAE3FA] shadow-xs">
+                <div
+                  className="flex items-center justify-between cursor-pointer select-none"
+                  onClick={() => setShowActiveVaultDrawer(!showActiveVaultDrawer)}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Database className="w-4 h-4 text-[#8064C8]" />
+                    <span className="text-xs sm:text-sm font-bold text-[#5B3F91]">
+                      Your Vault has {activeVaultTransactions.length} existing active transaction{activeVaultTransactions.length > 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <button type="button" className="text-xs text-[#8064C8] font-bold flex items-center gap-1">
+                    <span>{showActiveVaultDrawer ? "Hide" : "View"}</span>
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform duration-200 ${
+                        showActiveVaultDrawer ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {showActiveVaultDrawer && (
+                  <div className="mt-3 pt-3 border-t border-[#EAE3FA] grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                    {activeVaultTransactions.map((atx) => (
+                      <div
+                        key={atx.id}
+                        className="p-2.5 bg-[#FAF9FF] rounded-xl border border-[#EAE3FA] flex items-center justify-between text-xs"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <p className="font-bold text-[#5B3F91] truncate">{atx.merchant}</p>
+                          <p className="text-[11px] text-[#5B3F91]/70">
+                            {atx.date} • <span className="uppercase text-[10px] font-bold text-[#8064C8]">{atx.source || "manual"}</span>
+                          </p>
+                        </div>
+                        <span className="font-extrabold text-[#5B3F91] shrink-0">
+                          ₹{Number(atx.amount).toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Transaction Cards List Grid */}
             {transactions.length === 0 ? (
@@ -512,15 +822,82 @@ export default function UploadPage() {
                     key={tx.id}
                     className="p-4 bg-white/95 rounded-2xl border border-[#EAE3FA] shadow-xs hover:shadow-md transition-all flex items-center justify-between gap-3 group"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="w-11 h-11 bg-[#EAE3FA] rounded-2xl flex items-center justify-center shrink-0">
                         {getCategoryIcon(tx.category)}
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-[#5B3F91] truncate">{tx.desc}</p>
-                        <p className="text-xs text-[#5B3F91]/70 font-medium">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-bold text-[#5B3F91] truncate">{tx.desc}</p>
+                          {tx.source && (
+                            <span className="px-2 py-0.5 bg-[#EAE3FA] text-[#5B3F91] text-[10px] font-bold rounded-md uppercase tracking-wider">
+                              {tx.source.replace("_", " ")}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[#5B3F91]/70 font-medium mt-0.5">
                           {tx.date} • <span className="text-[#8064C8] font-semibold">{tx.category}</span>
                         </p>
+
+                        {/* Reconciled Badge */}
+                        {tx.isReconciled ? (
+                          <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shadow-2xs">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span className="font-semibold truncate">
+                              Reconciled with active record &quot;{duplicateMatches[tx.id]?.possibleDuplicate?.merchant}&quot;
+                            </span>
+                          </div>
+                        ) : duplicateMatches[tx.id] ? (
+                          <div className="mt-2.5 p-2.5 bg-amber-50/90 rounded-xl border border-amber-200 text-xs text-amber-900 flex flex-col gap-2 shadow-2xs">
+                            <div className="flex items-start gap-1.5">
+                              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-bold text-amber-950">
+                                  {duplicateMatches[tx.id].matchType === "reconciliation"
+                                    ? "🔗 Reconciliation Opportunity"
+                                    : duplicateMatches[tx.id].matchType === "batch_duplicate"
+                                    ? "⚠️ Duplicate within Batch"
+                                    : `⚠️ ${duplicateMatches[tx.id].duplicateScore}% Match with Active Record`}
+                                </p>
+                                <p className="text-amber-900 text-[11px] font-medium mt-0.5 leading-snug">
+                                  {duplicateMatches[tx.id].reason}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-1.5 border-t border-amber-200/80 flex-wrap">
+                              {duplicateMatches[tx.id].matchType === "reconciliation" ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleReconcile(tx.id, duplicateMatches[tx.id].possibleDuplicate.id)
+                                  }
+                                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg transition-all text-[11px] flex items-center gap-1 shadow-2xs"
+                                >
+                                  <Link2 className="w-3 h-3" />
+                                  <span>Reconcile & Merge</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(tx.id)}
+                                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg transition-all text-[11px] flex items-center gap-1 shadow-2xs"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Discard Duplicate</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleDismissDuplicate(tx.id)}
+                                className="px-2 py-1 bg-white hover:bg-amber-100 text-amber-900 font-semibold rounded-lg border border-amber-300 transition-colors text-[11px]"
+                              >
+                                Keep as Separate
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
 
@@ -578,7 +955,7 @@ export default function UploadPage() {
                     </span>
                   </div>
                   <p className="text-xs sm:text-sm text-[#5B3F91]/80 font-medium">
-                    Everything looks good? Once confirmed, these transactions will be added to your history.
+                    Everything looks good? Once confirmed, these transactions will be safely stored in your local vault.
                   </p>
                 </div>
               </div>
@@ -586,18 +963,28 @@ export default function UploadPage() {
               <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto">
                 <button
                   type="button"
-                  onClick={() => setStep("upload")}
+                  onClick={handleCancelImport}
                   className="flex-1 sm:flex-none px-4 py-3 bg-[#FAF9FF] hover:bg-[#EAE3FA] text-[#5B3F91] text-xs sm:text-sm font-bold rounded-full border border-[#EAE3FA] transition-colors"
                 >
                   ← Re-upload
                 </button>
                 <button
                   type="button"
-                  onClick={() => setStep("success")}
-                  className="flex-1 sm:flex-none px-6 py-3 bg-[#8064C8] hover:bg-[#6F53B7] text-white text-xs sm:text-sm font-bold rounded-full shadow-lg shadow-[#8064C8]/30 transition-all hover:scale-105 flex items-center justify-center gap-2"
+                  disabled={isConfirming || transactions.length === 0}
+                  onClick={handleConfirmImport}
+                  className="flex-1 sm:flex-none px-6 py-3 bg-[#8064C8] hover:bg-[#6F53B7] disabled:opacity-60 text-white text-xs sm:text-sm font-bold rounded-full shadow-lg shadow-[#8064C8]/30 transition-all hover:scale-105 flex items-center justify-center gap-2"
                 >
-                  <span>Confirm Import</span>
-                  <Check className="w-4 h-4" />
+                  {isConfirming ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving to Vault...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Confirm Import</span>
+                      <Check className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
               </div>
 
@@ -647,13 +1034,27 @@ export default function UploadPage() {
               />
             </p>
 
-            <Link
-              href="/"
-              className="px-8 py-4 bg-[#8064C8] hover:bg-[#6F53B7] text-white font-bold text-base rounded-full shadow-xl shadow-[#8064C8]/30 flex items-center gap-3 transition-all hover:scale-105"
-            >
-              <span>Go to Dashboard</span>
-              <ArrowRight className="w-5 h-5" />
-            </Link>
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+              <Link
+                href="/"
+                className="w-full sm:w-auto px-8 py-4 bg-[#8064C8] hover:bg-[#6F53B7] text-white font-bold text-base rounded-full shadow-xl shadow-[#8064C8]/30 flex items-center justify-center gap-3 transition-all hover:scale-105"
+              >
+                <span>Go to Dashboard</span>
+                <ArrowRight className="w-5 h-5" />
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setTransactions([]);
+                  setCurrentBatchId(null);
+                  setDuplicateMatches({});
+                  setStep("upload");
+                }}
+                className="w-full sm:w-auto px-6 py-4 bg-[#FAF9FF] hover:bg-[#EAE3FA] text-[#5B3F91] font-bold text-base rounded-full border border-[#EAE3FA] transition-colors"
+              >
+                Upload Another Statement
+              </button>
+            </div>
 
           </div>
         )}
@@ -742,6 +1143,21 @@ export default function UploadPage() {
                 </select>
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-[#5B3F91] mb-1">Source</label>
+                <select
+                  value={editingTx.source || "bank_statement"}
+                  onChange={(e) => setEditingTx({ ...editingTx, source: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-[#FAF9FF] rounded-xl border border-[#EAE3FA] text-sm text-[#5B3F91] font-semibold focus:outline-none focus:ring-2 focus:ring-[#8064C8]"
+                >
+                  {SOURCES.map((src) => (
+                    <option key={src.value} value={src.value}>
+                      {src.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex items-center justify-end gap-3 pt-3">
                 <button
                   type="button"
@@ -787,8 +1203,8 @@ export default function UploadPage() {
               <div>
                 <label className="block text-xs font-bold text-[#5B3F91] mb-1">Date</label>
                 <input
-                  type="text"
-                  placeholder="e.g. Sep 20"
+                  type="date"
+                  required
                   value={newTx.date}
                   onChange={(e) => setNewTx({ ...newTx, date: e.target.value })}
                   className="w-full px-4 py-2.5 bg-[#FAF9FF] rounded-xl border border-[#EAE3FA] text-sm text-[#5B3F91] font-semibold focus:outline-none focus:ring-2 focus:ring-[#8064C8]"
@@ -843,6 +1259,21 @@ export default function UploadPage() {
                   {CATEGORIES.map((cat) => (
                     <option key={cat} value={cat}>
                       {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#5B3F91] mb-1">Source</label>
+                <select
+                  value={newTx.source || "manual_entry"}
+                  onChange={(e) => setNewTx({ ...newTx, source: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-[#FAF9FF] rounded-xl border border-[#EAE3FA] text-sm text-[#5B3F91] font-semibold focus:outline-none focus:ring-2 focus:ring-[#8064C8]"
+                >
+                  {SOURCES.map((src) => (
+                    <option key={src.value} value={src.value}>
+                      {src.label}
                     </option>
                   ))}
                 </select>
