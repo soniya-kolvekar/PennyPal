@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { db } from "../../../lib/db";
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
 const CONVERSATION_ID = "main";
 
 export default function ChatPage() {
@@ -23,7 +24,25 @@ export default function ChatPage() {
     // ==========================================
 
     useEffect(() => {
-        loadMessages();
+        let isMounted = true;
+        async function fetchHistory() {
+            try {
+                const allMessages = await db.messages.toArray();
+                const savedMessages = allMessages
+                    .filter((msg) => msg.conversationId === CONVERSATION_ID)
+                    .sort((a, b) => a.createdAt - b.createdAt);
+
+                if (isMounted) {
+                    setMessages(savedMessages);
+                }
+            } catch (error) {
+                console.error("❌ Failed to load chat history:", error);
+            }
+        }
+        fetchHistory();
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     useEffect(() => {
@@ -31,42 +50,6 @@ export default function ChatPage() {
             behavior: "smooth"
         });
     }, [messages, loading]);
-
-    async function loadMessages() {
-        try {
-            const allMessages =
-                await db.messages.toArray();
-
-            const savedMessages =
-                allMessages
-                    .filter(
-                        (msg) =>
-                            msg.conversationId ===
-                            CONVERSATION_ID
-                    )
-                    .sort(
-                        (a, b) =>
-                            a.createdAt - b.createdAt
-                    );
-
-            console.log(
-                "📦 Messages loaded from IndexedDB:",
-                savedMessages
-            );
-
-            console.log(
-                "📦 Saved message count:",
-                savedMessages.length
-            );
-
-            setMessages(savedMessages);
-        } catch (error) {
-            console.error(
-                "❌ Failed to load chat history:",
-                error
-            );
-        }
-    }
 
     // ==========================================
     // SEND MESSAGE
@@ -189,7 +172,7 @@ export default function ChatPage() {
             );
 
             const response = await fetch(
-                "http://localhost:5000/api/chat",
+                `${BACKEND_URL}/api/chat`,
                 {
                     method: "POST",
 
@@ -500,7 +483,7 @@ export default function ChatPage() {
                                     <div className="flex items-center gap-2 mb-1">
 
                                         <h2 className="text-xl sm:text-2xl font-bold text-[#5B3F91]">
-                                            Hey! I'm Penny
+                                            Hey! I&apos;m Penny
                                         </h2>
 
                                         <Image

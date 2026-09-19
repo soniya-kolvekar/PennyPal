@@ -22,7 +22,15 @@ app.use('/api/auth', authRoutes);
 
 app.get("/", (req, res) => {
   res.json({
-    message: " backend is running!"
+    message: "PennyPal backend is running!"
+  });
+});
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    message: "PennyPal backend is healthy",
+    timestamp: new Date().toISOString()
   });
 });
 
