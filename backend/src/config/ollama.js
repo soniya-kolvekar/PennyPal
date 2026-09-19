@@ -8,7 +8,7 @@ const ollamaClient = new Ollama({
 });
 
 const OLLAMA_MODEL =
-  process.env.OLLAMA_MODEL;
+  process.env.OLLAMA_MODEL || "llama3.1:8b";
 
 module.exports = {
   ollamaClient,
