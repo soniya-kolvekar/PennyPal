@@ -4,6 +4,7 @@ const cors = require('cors');
 const chatbotRoutes = require("./routes/chatbot.routes");
 const authRoutes = require('./routes/auth.routes');
 const analyzeRoutes = require("./routes/analyze.routes");
+const goalsRoutes = require("./routes/goals.routes");
 
 const {
   getDatabaseInfo,
@@ -34,6 +35,11 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+app.use(
+  "/api/goals",
+  goalsRoutes
+);
+
 
 app.get("/api/db", (req, res) => {
   res.json({
@@ -45,6 +51,8 @@ app.get("/api/db", (req, res) => {
 app.use("/api/chat", chatbotRoutes);
 
 app.use("/api/analyze", analyzeRoutes);
+
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
