@@ -277,6 +277,7 @@ function tryParseCSV(text) {
     const rawLine = headerCandidates[i];
     for (const d of [",", ";", "\t"]) {
       const parts = splitCSVLine(rawLine, d).map((s) => s.toLowerCase().trim());
+      if (parts.length < 2) continue;
       const hasDate = parts.some((p) => p.includes("date"));
       const hasAmountOrDebit = parts.some((p) => p.includes("amount") || p.includes("debit") || p.includes("withdrawal") || p.includes("credit"));
       if (hasDate && hasAmountOrDebit) {
