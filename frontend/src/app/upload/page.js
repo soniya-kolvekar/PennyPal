@@ -44,20 +44,6 @@ import {
   getVaultId
 } from "../../../lib/vault";
 
-const INITIAL_TRANSACTIONS = [
-  { id: "1", date: "Sep 01", desc: "SWIGGY FOOD DELIVERY", amount: 450, type: "Expense", category: "Food & Dining" },
-  { id: "2", date: "Sep 02", desc: "AMAZON INDIA", amount: 1800, type: "Expense", category: "Shopping" },
-  { id: "3", date: "Sep 03", desc: "MONTHLY SALARY CREDIT", amount: 50000, type: "Income", category: "Salary" },
-  { id: "4", date: "Sep 04", desc: "UBER RIDE", amount: 320, type: "Expense", category: "Travel" },
-  { id: "5", date: "Sep 05", desc: "STARBUCKS COFFEE", amount: 280, type: "Expense", category: "Food & Dining" },
-  { id: "6", date: "Sep 06", desc: "NETFLIX SUBSCRIPTION", amount: 499, type: "Expense", category: "Entertainment" },
-  { id: "7", date: "Sep 08", desc: "GROCERY SUPERMARKET", amount: 2450, type: "Expense", category: "Groceries" },
-  { id: "8", date: "Sep 10", desc: "ELECTRICITY BILL", amount: 1650, type: "Expense", category: "Utilities" },
-  { id: "9", date: "Sep 12", desc: "ZOMATO GOURMET", amount: 620, type: "Expense", category: "Food & Dining" },
-  { id: "10", date: "Sep 14", desc: "FREELANCE DESIGN FEE", amount: 12500, type: "Income", category: "Income" },
-  { id: "11", date: "Sep 16", desc: "BOOKMYSHOW MOVIES", amount: 750, type: "Expense", category: "Entertainment" },
-  { id: "12", date: "Sep 18", desc: "PHARMACY MEDICAL", amount: 430, type: "Expense", category: "Health" }
-];
 
 const CATEGORIES = [
   "Food & Dining",
@@ -134,7 +120,7 @@ export default function UploadPage() {
           setActiveVaultTransactions(active || []);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     return () => {
       isSubscribed = false;
@@ -205,8 +191,6 @@ export default function UploadPage() {
       const batch = data.batch || { id: crypto.randomUUID(), fileName: file.name };
       setCurrentBatchId(batch.id);
 
-      // 3. Stage candidate transactions in IndexedDB as pending_review
-      await stageImportBatch(batch, candidateTransactions);
 
       // 4. Run duplicate detection against active transactions in IndexedDB
       const duplicateScores = await detectPossibleDuplicates(candidateTransactions);
@@ -314,7 +298,7 @@ export default function UploadPage() {
   const handleDelete = async (id) => {
     try {
       await db.transactions.delete(id);
-    } catch {}
+    } catch { }
     setTransactions((prev) => prev.filter((t) => t.id !== id));
     setDuplicateMatches((prev) => {
       const next = { ...prev };
@@ -345,11 +329,10 @@ export default function UploadPage() {
     e.preventDefault();
     if (!newTx.desc || !newTx.amount) return;
 
-    // Ensure currentBatchId exists for staging
     const batchId = currentBatchId || crypto.randomUUID();
     if (!currentBatchId) {
       setCurrentBatchId(batchId);
-      await stageImportBatch({ id: batchId, fileName: fileName || "Manual Entry" }, []);
+      // Removed staging here since we only stage on confirm now
     }
 
     const created = {
@@ -363,29 +346,6 @@ export default function UploadPage() {
       importBatchId: batchId,
     };
 
-    // Stage in IndexedDB with status: 'pending_review' so it NEVER shows as active before confirmation!
-    try {
-      const vaultId = getVaultId();
-      await db.transactions.put({
-        id: created.id,
-        vaultId,
-        date: created.date,
-        merchant: created.desc,
-        amount: created.amount,
-        type: created.type.toLowerCase(),
-        category: created.category,
-        source: created.source,
-        status: "pending_review",
-        reconciledWith: null,
-        originalDescription: created.desc,
-        originalMerchant: created.desc,
-        importBatchId: batchId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.warn("Staging manual transaction error:", err);
-    }
 
     const updatedList = [created, ...transactions];
     setTransactions(updatedList);
@@ -487,7 +447,7 @@ export default function UploadPage() {
 
       {/* MAIN CONTAINER */}
       <main className="relative z-10 flex-1 max-w-5xl w-full mx-auto px-6 sm:px-12 py-10 flex flex-col justify-center">
-        
+
         {/* ========================================================================= */}
         {/* STEP 1: UPLOAD STATE */}
         {/* ========================================================================= */}
@@ -528,7 +488,7 @@ export default function UploadPage() {
 
             {/* Layout Grid: Upload Card + Penny Companion */}
             <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-              
+
               {/* Left Column: Big Cute Upload Card */}
               <div className="lg:col-span-8 flex flex-col items-center">
                 <div
@@ -536,11 +496,10 @@ export default function UploadPage() {
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className={`w-full p-8 sm:p-12 bg-white/90 backdrop-blur-sm rounded-3xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center text-center shadow-lg hover:shadow-xl ${
-                    isDragging
-                      ? "border-[#8064C8] bg-[#EAE3FA]/40 scale-[1.01]"
-                      : "border-[#C9B9F2] hover:border-[#8064C8]"
-                  }`}
+                  className={`w-full p-8 sm:p-12 bg-white/90 backdrop-blur-sm rounded-3xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center text-center shadow-lg hover:shadow-xl ${isDragging
+                    ? "border-[#8064C8] bg-[#EAE3FA]/40 scale-[1.01]"
+                    : "border-[#C9B9F2] hover:border-[#8064C8]"
+                    }`}
                 >
                   <input
                     type="file"
@@ -733,7 +692,7 @@ export default function UploadPage() {
         {/* ========================================================================= */}
         {step === "review" && (
           <div className="flex flex-col w-full animate-fade-in">
-            
+
             {/* Review Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
               <div>
@@ -773,9 +732,8 @@ export default function UploadPage() {
                   <button type="button" className="text-xs text-[#8064C8] font-bold flex items-center gap-1">
                     <span>{showActiveVaultDrawer ? "Hide" : "View"}</span>
                     <ChevronDown
-                      className={`w-4 h-4 transition-transform duration-200 ${
-                        showActiveVaultDrawer ? "rotate-180" : ""
-                      }`}
+                      className={`w-4 h-4 transition-transform duration-200 ${showActiveVaultDrawer ? "rotate-180" : ""
+                        }`}
                     />
                   </button>
                 </div>
@@ -865,8 +823,8 @@ export default function UploadPage() {
                                   {duplicateMatches[tx.id].matchType === "reconciliation"
                                     ? "🔗 Reconciliation Opportunity"
                                     : duplicateMatches[tx.id].matchType === "batch_duplicate"
-                                    ? "⚠️ Duplicate within Batch"
-                                    : `⚠️ ${duplicateMatches[tx.id].duplicateScore}% Match with Active Record`}
+                                      ? "⚠️ Duplicate within Batch"
+                                      : `⚠️ ${duplicateMatches[tx.id].duplicateScore}% Match with Active Record`}
                                 </p>
                                 <p className="text-amber-900 text-[11px] font-medium mt-0.5 leading-snug">
                                   {duplicateMatches[tx.id].reason}
@@ -912,9 +870,8 @@ export default function UploadPage() {
 
                     <div className="flex items-center gap-3 shrink-0">
                       <span
-                        className={`text-sm font-extrabold ${
-                          tx.type === "Income" ? "text-emerald-600" : "text-[#5B3F91]"
-                        }`}
+                        className={`text-sm font-extrabold ${tx.type === "Income" ? "text-emerald-600" : "text-[#5B3F91]"
+                          }`}
                       >
                         {tx.type === "Income" ? "+" : "-"} ₹{tx.amount.toLocaleString("en-IN")}
                       </span>
@@ -945,7 +902,7 @@ export default function UploadPage() {
 
             {/* Confirmation Footer Bar */}
             <div className="p-6 bg-white/90 backdrop-blur-md rounded-3xl border border-[#EAE3FA] shadow-xl flex flex-col sm:flex-row items-center justify-between gap-6">
-              
+
               <div className="flex items-center gap-4 text-left">
                 <div className="relative w-20 h-20 shrink-0 hidden sm:block">
                   <video
@@ -986,7 +943,7 @@ export default function UploadPage() {
                   {isConfirming ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Saving to Vault...</span>
+                      <span>Penny is categorizing...</span>
                     </>
                   ) : (
                     <>
@@ -1007,7 +964,7 @@ export default function UploadPage() {
         {/* ========================================================================= */}
         {step === "success" && (
           <div className="flex flex-col items-center text-center max-w-md mx-auto w-full animate-fade-in py-8">
-            
+
             {/* Celebrating Penguin Video */}
             <div className="relative w-64 h-68 sm:w-72 sm:h-76 mb-4">
               <video
@@ -1076,7 +1033,7 @@ export default function UploadPage() {
       {editingTx && (
         <div className="fixed inset-0 z-50 bg-[#5B3F91]/30 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-3xl border border-[#EAE3FA] shadow-2xl p-6 animate-scale-up">
-            
+
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-handwritten text-2xl font-bold text-[#5B3F91]">
                 Edit Transaction
@@ -1194,7 +1151,7 @@ export default function UploadPage() {
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-[#5B3F91]/30 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-3xl border border-[#EAE3FA] shadow-2xl p-6 animate-scale-up">
-            
+
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-handwritten text-2xl font-bold text-[#5B3F91]">
                 Add Transaction

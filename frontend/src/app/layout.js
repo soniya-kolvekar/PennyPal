@@ -1,5 +1,6 @@
 import { Fredoka, Caveat } from "next/font/google";
 import "./globals.css";
+import TemptationRadar from "../components/TemptationRadar";
 
 const fredoka = Fredoka({
   variable: "--font-fredoka",
@@ -29,6 +30,7 @@ export default function RootLayout({ children }) {
     >
       <body className="min-h-full flex flex-col bg-[#FAF9FF] text-[#5B3F91] font-sans">
         {children}
+        <TemptationRadar />
       </body>
     </html>
   );

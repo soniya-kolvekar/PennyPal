@@ -204,8 +204,46 @@ Analyze this data and return the requested JSON.
 }
 
 
+async function generateTemptationAlertMessage(category, analyticsSummary) {
+    const systemPrompt = `
+You are Penny, a highly sarcastic, slightly sassy, but ultimately caring personal finance coach.
+
+Your user has just entered a geographic spending zone (e.g. a mall, a coffee shop) associated with the category: "${category}".
+
+Your job is to generate a short, punchy push notification (1-2 sentences max) to warn them before they spend money.
+Be sarcastic, witty, and reference their current financial standing if relevant.
+
+Rules:
+- Keep it under 2 sentences.
+- Use emojis.
+- Be funny and sarcastic but don't be genuinely mean.
+- Only return the raw message text, no JSON, no quotes around the text.
+`;
+
+    const userPrompt = `
+Category: ${category}
+User's Financial Summary:
+${JSON.stringify(analyticsSummary, null, 2)}
+
+Generate the notification message.
+`;
+
+    try {
+        const rawResponse = await askOllama({
+            systemPrompt,
+            userPrompt,
+            json: false
+        });
+        return rawResponse.trim();
+    } catch (error) {
+        console.error("Temptation message generation failed, using fallback:", error);
+        return `🐧 Oh look, a ${category} area. Your wallet would like a word before you do something we both regret.`;
+    }
+}
+
 module.exports = {
     askOllama,
     categorizeTransaction,
-    analyzeFinancialBehavior
+    analyzeFinancialBehavior,
+    generateTemptationAlertMessage
 };
