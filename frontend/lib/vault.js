@@ -518,7 +518,7 @@ export async function detectPossibleDuplicates(candidates = []) {
 export async function exportVaultData() {
   const vaultId = getVaultId();
 
-  const [transactions, importBatches, goals, achievements, userProgress, settings] =
+  const [transactions, importBatches, goals, achievements, userProgress, settings, chatMessages] =
     await Promise.all([
       db.transactions.where("vaultId").equals(vaultId).toArray(),
       db.importBatches.where("vaultId").equals(vaultId).toArray(),
@@ -526,6 +526,7 @@ export async function exportVaultData() {
       db.achievements.where("vaultId").equals(vaultId).toArray(),
       db.userProgress.where("vaultId").equals(vaultId).toArray(),
       db.settings.where("vaultId").equals(vaultId).toArray(),
+      db.chatMessages.where("vaultId").equals(vaultId).toArray(),
     ]);
 
   return {
@@ -540,6 +541,7 @@ export async function exportVaultData() {
       achievements,
       userProgress,
       settings,
+      chatMessages,
     },
   };
 }
@@ -567,6 +569,7 @@ export async function restoreVaultData(payload, options = { mode: "merge" }) {
       db.achievements,
       db.userProgress,
       db.settings,
+      db.chatMessages,
     ],
     async () => {
       // 1. If replace mode, clear all existing data for this vault
@@ -578,6 +581,7 @@ export async function restoreVaultData(payload, options = { mode: "merge" }) {
           db.achievements.where("vaultId").equals(vaultId).delete(),
           db.userProgress.where("vaultId").equals(vaultId).delete(),
           db.settings.where("vaultId").equals(vaultId).delete(),
+          db.chatMessages.where("vaultId").equals(vaultId).delete(),
         ]);
       }
 
@@ -641,6 +645,10 @@ export async function restoreVaultData(payload, options = { mode: "merge" }) {
         const batchesToPut = vault.importBatches.map((b) => ({ ...b, vaultId }));
         await db.importBatches.bulkPut(batchesToPut);
       }
+      if (Array.isArray(vault.chatMessages) && vault.chatMessages.length > 0) {
+        const msgsToPut = vault.chatMessages.map((m) => ({ ...m, vaultId }));
+        await db.chatMessages.bulkPut(msgsToPut);
+      }
 
       return {
         importedTxCount,
@@ -667,6 +675,7 @@ export async function clearLocalVaultData() {
       db.achievements,
       db.userProgress,
       db.settings,
+      db.chatMessages,
     ],
     async () => {
       await Promise.all([
@@ -676,10 +685,91 @@ export async function clearLocalVaultData() {
         db.achievements.where("vaultId").equals(vaultId).delete(),
         db.userProgress.where("vaultId").equals(vaultId).delete(),
         db.settings.where("vaultId").equals(vaultId).delete(),
+        db.chatMessages.where("vaultId").equals(vaultId).delete(),
       ]);
     }
   );
 
   return true;
+}
+
+/**
+ * Compile a lightweight, privacy-preserving financial summary from IndexedDB
+ * for Penny the emotional financial therapist mascot companion.
+ */
+export async function getVaultFinancialContext() {
+  try {
+    const vaultId = getVaultId();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-31`;
+
+    const records = await db.transactions
+      .where("date")
+      .between(startStr, endStr, true, true)
+      .toArray();
+
+    const activeTxs = records.filter(
+      (tx) =>
+        (!tx.vaultId || tx.vaultId === vaultId) &&
+        (tx.status === "active" || tx.status === "reconciled")
+    );
+
+    const expenses = activeTxs.filter((t) => t.type?.toLowerCase() === "expense");
+    const incomeTxs = activeTxs.filter((t) => t.type?.toLowerCase() === "income");
+
+    const totalSpent = expenses.reduce((acc, t) => acc + Number(t.amount || 0), 0);
+    const totalIncome = incomeTxs.reduce((acc, t) => acc + Number(t.amount || 0), 0);
+    const netSavings = totalIncome - totalSpent;
+
+    // Category breakdown
+    const catMap = {};
+    expenses.forEach((t) => {
+      const cat = t.category || "Other";
+      catMap[cat] = (catMap[cat] || 0) + Number(t.amount || 0);
+    });
+
+    const topCategories = Object.keys(catMap)
+      .map((cat) => ({ category: cat, amount: catMap[cat] }))
+      .sort((a, b) => b.amount - a.amount);
+
+    // Recent 5 transactions
+    const recentTransactions = [...activeTxs]
+      .sort((a, b) => (b.date > a.date ? 1 : -1))
+      .slice(0, 5)
+      .map((t) => ({
+        date: t.date,
+        merchant: t.merchant || t.desc || "Item",
+        amount: Number(t.amount),
+        category: t.category || "Other",
+        type: t.type || "expense",
+      }));
+
+    return {
+      currentMonth: now.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+      totalTransactions: activeTxs.length,
+      totalSpentThisMonth: totalSpent,
+      totalIncomeThisMonth: totalIncome,
+      netSavingsThisMonth: netSavings,
+      topCategory: topCategories[0] || null,
+      topCategories: topCategories.slice(0, 5),
+      foodSpent: catMap["Food"] || 0,
+      shoppingSpent: catMap["Shopping"] || 0,
+      recentTransactions,
+    };
+  } catch {
+    return {
+      currentMonth: "Current Month",
+      totalTransactions: 0,
+      totalSpentThisMonth: 0,
+      totalIncomeThisMonth: 0,
+      netSavingsThisMonth: 0,
+      topCategories: [],
+      recentTransactions: [],
+    };
+  }
 }
 

@@ -244,6 +244,9 @@ export default function SettingsPage() {
             <Link href="/settings" className="text-[#8064C8] transition-colors">
               Settings
             </Link>
+            <Link href="/chat" className="hover:text-[#8064C8] transition-colors">
+              Chat
+            </Link>
           </div>
 
           <div className="flex items-center gap-3">

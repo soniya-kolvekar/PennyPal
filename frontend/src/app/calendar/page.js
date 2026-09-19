@@ -269,6 +269,9 @@ export default function CalendarPage() {
             <Link href="/settings" className="hover:text-[#8064C8] transition-colors">
               Settings
             </Link>
+            <Link href="/chat" className="hover:text-[#8064C8] transition-colors">
+              Chat
+            </Link>
           </div>
 
           <div className="flex items-center gap-3">
@@ -643,6 +646,7 @@ export default function CalendarPage() {
             <Link href="/calendar" className="hover:text-[#8064C8]">Calendar</Link>
             <Link href="/upload" className="hover:text-[#8064C8]">Upload</Link>
             <Link href="/settings" className="hover:text-[#8064C8]">Settings</Link>
+            <Link href="/chat" className="hover:text-[#8064C8]">Chat</Link>
           </div>
         </div>
       </footer>
