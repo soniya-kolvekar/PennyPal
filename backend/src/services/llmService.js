@@ -2,6 +2,7 @@ const {
     ollamaClient,
     OLLAMA_MODEL
 } = require("../config/ollama");
+const { findRelevantKnowledge } = require("./ragService");
 
 const PENNY_SYSTEM_PROMPT = `
 You are Penny, the personal finance coach inside PennyPal.
@@ -37,6 +38,22 @@ IMPORTANT RULES:
 `;
 
 async function generatePennyResponse(message, context = {}) {
+    // RAG Retrieval: Fetch matching stored knowledge from knowledge base
+    const relevantKnowledge = await findRelevantKnowledge(message);
+
+    let knowledgeContext = "";
+    if (relevantKnowledge.length > 0) {
+        knowledgeContext = `
+RELEVANT KNOWLEDGE BASE (Retrieved Facts - Use these to give accurate guidance):
+${relevantKnowledge
+    .map(
+        (k, i) =>
+            `[Fact ${i + 1}] ${k.topic ? `Topic: ${k.topic} | ` : ""}Q: ${k.question}\nA: ${k.answer}`
+    )
+    .join("\n\n")}
+`;
+    }
+
     const financialContext =
         Object.keys(context).length > 0
             ? `
@@ -60,6 +77,7 @@ Do not assume anything about the user's finances.
                 role: "system",
                 content:
                     PENNY_SYSTEM_PROMPT +
+                    knowledgeContext +
                     financialContext
             },
             {
@@ -78,4 +96,4 @@ Do not assume anything about the user's finances.
 
 module.exports = {
     generatePennyResponse
-};
+};

@@ -14,8 +14,11 @@ const caveat = Caveat({
 });
 
 export const metadata = {
-  title: "PennyPal - Sign Up",
+  title: "PennyPal",
   description: "Create your PennyPal account and start your money journey!",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 export default function RootLayout({ children }) {
@@ -30,4 +33,3 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
-
