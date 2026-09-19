@@ -252,6 +252,9 @@ export default function DashboardPage() {
             <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
               Upload
             </Link>
+            <Link href="/settings" className="hover:text-[#8064C8] transition-colors">
+              Settings
+            </Link>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -696,6 +699,7 @@ export default function DashboardPage() {
             <Link href="/dashboard" className="hover:text-[#8064C8]">Dashboard</Link>
             <Link href="/calendar" className="hover:text-[#8064C8]">Calendar</Link>
             <Link href="/upload" className="hover:text-[#8064C8]">Upload</Link>
+            <Link href="/settings" className="hover:text-[#8064C8]">Settings</Link>
           </div>
         </div>
       </footer>

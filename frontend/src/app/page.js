@@ -84,6 +84,9 @@ export default function LandingPage() {
             <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
               Upload Statement
             </Link>
+            <Link href="/settings" className="hover:text-[#8064C8] transition-colors">
+              Settings
+            </Link>
             <a href="#features" className="hover:text-[#8064C8] transition-colors">
               Features
             </a>

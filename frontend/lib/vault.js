@@ -507,3 +507,179 @@ export async function detectPossibleDuplicates(candidates = []) {
     };
   });
 }
+
+// =========================================================================
+// BACKUP & RESTORE UTILITIES (Scoped to current vaultId)
+// =========================================================================
+
+/**
+ * Collect all records belonging to the current user's vault for backup.
+ */
+export async function exportVaultData() {
+  const vaultId = getVaultId();
+
+  const [transactions, importBatches, goals, achievements, userProgress, settings] =
+    await Promise.all([
+      db.transactions.where("vaultId").equals(vaultId).toArray(),
+      db.importBatches.where("vaultId").equals(vaultId).toArray(),
+      db.goals.where("vaultId").equals(vaultId).toArray(),
+      db.achievements.where("vaultId").equals(vaultId).toArray(),
+      db.userProgress.where("vaultId").equals(vaultId).toArray(),
+      db.settings.where("vaultId").equals(vaultId).toArray(),
+    ]);
+
+  return {
+    app: "PennyPal",
+    format: "finpal",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    vault: {
+      transactions,
+      importBatches,
+      goals,
+      achievements,
+      userProgress,
+      settings,
+    },
+  };
+}
+
+/**
+ * Restore an imported vault payload into the current user's local vault.
+ * @param {Object} payload - The decrypted backup payload containing { vault: { ... } }
+ * @param {Object} options - { mode: "merge" | "replace" }
+ */
+export async function restoreVaultData(payload, options = { mode: "merge" }) {
+  const vaultId = getVaultId();
+  const { mode = "merge" } = options;
+  const vault = payload?.vault;
+
+  if (!vault || !Array.isArray(vault.transactions)) {
+    throw new Error("Invalid backup data: missing transactions array.");
+  }
+
+  return await db.transaction(
+    "rw",
+    [
+      db.transactions,
+      db.importBatches,
+      db.goals,
+      db.achievements,
+      db.userProgress,
+      db.settings,
+    ],
+    async () => {
+      // 1. If replace mode, clear all existing data for this vault
+      if (mode === "replace") {
+        await Promise.all([
+          db.transactions.where("vaultId").equals(vaultId).delete(),
+          db.importBatches.where("vaultId").equals(vaultId).delete(),
+          db.goals.where("vaultId").equals(vaultId).delete(),
+          db.achievements.where("vaultId").equals(vaultId).delete(),
+          db.userProgress.where("vaultId").equals(vaultId).delete(),
+          db.settings.where("vaultId").equals(vaultId).delete(),
+        ]);
+      }
+
+      // Existing transaction IDs for deduplication in merge mode
+      const existingTxs = await db.transactions.where("vaultId").equals(vaultId).toArray();
+      const existingIdSet = new Set(existingTxs.map((t) => t.id));
+      const existingSigSet = new Set(
+        existingTxs.map((t) => `${t.date}_${t.amount}_${(t.merchant || "").toLowerCase().trim()}`)
+      );
+
+      let importedTxCount = 0;
+      let skippedTxCount = 0;
+
+      // 2. Prepare transactions with current vaultId
+      const txsToInsert = [];
+      for (const rawTx of vault.transactions) {
+        const txSig = `${rawTx.date}_${rawTx.amount}_${(rawTx.merchant || rawTx.desc || "").toLowerCase().trim()}`;
+
+        if (mode === "merge" && (existingIdSet.has(rawTx.id) || existingSigSet.has(txSig))) {
+          skippedTxCount++;
+          continue;
+        }
+
+        const safeTx = {
+          ...rawTx,
+          id: rawTx.id || crypto.randomUUID(),
+          vaultId,
+          merchant: rawTx.merchant || rawTx.desc || "Transaction",
+          amount: Number(rawTx.amount),
+          type: rawTx.type?.toLowerCase() === "income" ? "income" : "expense",
+          category: rawTx.category || "Other",
+          status: rawTx.status || "active",
+          source: rawTx.source || "backup_restore",
+          updatedAt: new Date().toISOString(),
+        };
+
+        txsToInsert.push(safeTx);
+        existingIdSet.add(safeTx.id);
+        existingSigSet.add(txSig);
+        importedTxCount++;
+      }
+
+      if (txsToInsert.length > 0) {
+        await db.transactions.bulkPut(txsToInsert);
+      }
+
+      // 3. Restore secondary collections if present
+      if (Array.isArray(vault.goals) && vault.goals.length > 0) {
+        const goalsToPut = vault.goals.map((g) => ({ ...g, vaultId }));
+        await db.goals.bulkPut(goalsToPut);
+      }
+      if (Array.isArray(vault.achievements) && vault.achievements.length > 0) {
+        const achToPut = vault.achievements.map((a) => ({ ...a, vaultId }));
+        await db.achievements.bulkPut(achToPut);
+      }
+      if (Array.isArray(vault.userProgress) && vault.userProgress.length > 0) {
+        const progToPut = vault.userProgress.map((p) => ({ ...p, vaultId }));
+        await db.userProgress.bulkPut(progToPut);
+      }
+      if (Array.isArray(vault.importBatches) && vault.importBatches.length > 0) {
+        const batchesToPut = vault.importBatches.map((b) => ({ ...b, vaultId }));
+        await db.importBatches.bulkPut(batchesToPut);
+      }
+
+      return {
+        importedTxCount,
+        skippedTxCount,
+        totalTxsInBackup: vault.transactions.length,
+        mode,
+      };
+    }
+  );
+}
+
+/**
+ * Permanently purge all local financial records for the current vaultId.
+ */
+export async function clearLocalVaultData() {
+  const vaultId = getVaultId();
+
+  await db.transaction(
+    "rw",
+    [
+      db.transactions,
+      db.importBatches,
+      db.goals,
+      db.achievements,
+      db.userProgress,
+      db.settings,
+    ],
+    async () => {
+      await Promise.all([
+        db.transactions.where("vaultId").equals(vaultId).delete(),
+        db.importBatches.where("vaultId").equals(vaultId).delete(),
+        db.goals.where("vaultId").equals(vaultId).delete(),
+        db.achievements.where("vaultId").equals(vaultId).delete(),
+        db.userProgress.where("vaultId").equals(vaultId).delete(),
+        db.settings.where("vaultId").equals(vaultId).delete(),
+      ]);
+    }
+  );
+
+  return true;
+}
+
