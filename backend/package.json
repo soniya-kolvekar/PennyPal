@@ -1,0 +1,38 @@
+{
+  "name": "pennypal-backend",
+  "version": "1.0.0",
+  "description": "PennyPal Backend API - AI-powered personal finance & expense tracking",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "keywords": [
+    "pennypal",
+    "finance",
+    "expense-tracker",
+    "ollama",
+    "ocr",
+    "rag"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dexie": "^4.4.6",
+    "dexie-react-hooks": "^4.4.0",
+    "dotenv": "^18.0.1",
+    "express": "^5.2.1",
+    "firebase-admin": "^14.4.0",
+    "mongoose": "^9.10.1",
+    "multer": "^2.4.0",
+    "ollama": "^0.6.3",
+    "pdf-parse": "^2.4.5",
+    "tesseract.js": "^7.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

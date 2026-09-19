@@ -3,16 +3,31 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
+import { signin } from "../../../lib/auth";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Login submitted:", { email, password });
+    setError("");
+    setLoading(true);
+
+    const res = await signin(email, password);
+    setLoading(false);
+
+    if (res.success) {
+      router.push("/");
+    } else {
+      setError(res.error);
+    }
   };
 
   return (
@@ -104,6 +119,14 @@ export default function LoginPage() {
               />
             </p>
 
+            {/* Error Message Banner */}
+            {error && (
+              <div className="mb-3 p-3 bg-[#FDF2F4] border border-[#F6C9D5] rounded-2xl text-xs text-[#B93856] flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#B93856]" />
+                <span>{error}</span>
+              </div>
+            )}
+
             {/* Sign in form */}
             <form onSubmit={handleSubmit} className="space-y-3">
               {/* Email Input */}
@@ -142,7 +165,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 text-[#A98FE3] hover:text-[#8064C8] transition-colors focus:outline-none"
+                    className="absolute right-3.5 text-[#A98FE3] hover:text-[#8064C8] transition-colors focus:outline-none cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -152,10 +175,20 @@ export default function LoginPage() {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full mt-1 py-3 px-6 bg-[#8064C8] hover:bg-[#6F53B7] active:scale-[0.99] text-white font-semibold rounded-full shadow-md shadow-[#8064C8]/30 flex items-center justify-center gap-2 transition-all cursor-pointer text-sm"
+                disabled={loading}
+                className="w-full mt-1 py-3 px-6 bg-[#8064C8] hover:bg-[#6F53B7] disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99] text-white font-semibold rounded-full shadow-md shadow-[#8064C8]/30 flex items-center justify-center gap-2 transition-all cursor-pointer text-sm"
               >
-                <span>Sign In</span>
-                <ArrowRight className="w-4 h-4" />
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
 
