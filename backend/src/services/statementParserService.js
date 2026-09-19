@@ -1,3 +1,5 @@
+const crypto = require("crypto");
+
 function parseBankStatement(text) {
     const lines = text
         .split(/\r?\n/)
@@ -53,8 +55,6 @@ function parseTransactionLine(line) {
         return null;
     }
 
-    /*Remove date and amount from the description.*/
-
     let description = line
         .replace(dateMatch[0], "")
         .replace(
@@ -68,15 +68,13 @@ function parseTransactionLine(line) {
         description = "Unknown";
     }
 
-    /*debit/credit detection.*/
-
     const upperLine = line.toUpperCase();
 
     let type = "expense";
 
     if (
         upperLine.includes("CREDIT") ||
-        upperLine.includes("CR") ||
+        upperLine.includes(" CR ") ||
         upperLine.includes("SALARY")
     ) {
         type = "income";
@@ -99,7 +97,13 @@ function parseTransactionLine(line) {
 
         source: "bank_statement",
 
-        status: "active",
+        // IMPORTANT:
+        // The transaction is NOT canonical yet.
+        status: "pending_review",
+
+        createdAt: new Date().toISOString(),
+
+        updatedAt: new Date().toISOString(),
     };
 }
 
