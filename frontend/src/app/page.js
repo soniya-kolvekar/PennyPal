@@ -78,6 +78,9 @@ export default function LandingPage() {
             <Link href="/dashboard" className="hover:text-[#8064C8] transition-colors">
               Dashboard
             </Link>
+            <Link href="/calendar" className="hover:text-[#8064C8] transition-colors">
+              Calendar
+            </Link>
             <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
               Upload Statement
             </Link>
