@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme {
+  --color-deep-purple: #5B3F91;
+  --color-primary-purple: #8064C8;
+  --color-lavender: #A98FE3;
+  --color-soft-lavender: #C9B9F2;
+  --color-pale-lavender: #EAE3FA;
+  --color-off-white: #FAF9FF;
+  --color-blush-pink: #F6C9D5;
+  --color-penny-yellow: #F6B83F;
+  --color-soft-lilac-green: #D8E5D0;
+  
+  --font-sans: var(--font-fredoka), ui-sans-serif, system-ui, sans-serif;
+  --font-handwritten: var(--font-caveat), cursive, sans-serif;
+}
+
+:root {
+  --background: #FAF9FF;
+  --foreground: #5B3F91;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+.font-handwritten {
+  font-family: var(--font-caveat), cursive, sans-serif;
+}
+
+@keyframes penguinWalk {
+  0% {
+    transform: translateX(-90px);
+  }
+  100% {
+    transform: translateX(380px);
+  }
+}
+
+.animate-penguin-walk {
+  animation: penguinWalk 10s linear infinite;
+}
+
