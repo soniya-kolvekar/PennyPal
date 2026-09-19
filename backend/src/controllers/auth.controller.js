@@ -1,8 +1,6 @@
 const { firebaseConfig } = require('../config/firebase');
 
-/**
- * Sign up a new user using Firebase Authentication REST API
- */
+/*Sign up a new user using Firebase Authentication REST API*/
 const signup = async (req, res) => {
   const { email, password } = req.body;
 
@@ -46,9 +44,7 @@ const signup = async (req, res) => {
   }
 };
 
-/**
- * Sign in an existing user using Firebase Authentication REST API
- */
+/* Sign in an existing user using Firebase Authentication REST API*/
 const signin = async (req, res) => {
   const { email, password } = req.body;
 

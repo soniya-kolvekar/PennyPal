@@ -1,7 +1,11 @@
 const express = require('express');
 const cors = require('cors');
-
 const authRoutes = require('./routes/auth.routes');
+const analyzeRoutes = require("./routes/analyze.routes");
+
+const {
+  getDatabaseInfo,
+} = require("./config/db");
 
 const app = express();
 
@@ -17,6 +21,15 @@ app.use('/api/auth', authRoutes);
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'Server is running' });
 });
+
+app.get("/api/db", (req, res) => {
+  res.json({
+    success: true,
+    database: getDatabaseInfo(),
+  });
+});
+
+app.use("/api/analyze", analyzeRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
