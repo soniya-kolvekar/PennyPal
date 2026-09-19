@@ -135,3 +135,77 @@ module.exports = {
     askOllama,
     categorizeTransaction
 };
+
+async function analyzeFinancialBehavior(analytics) {
+
+    const systemPrompt = `
+You are Penny, FinPal's personal finance coach.
+
+Analyze the financial data provided by FinPal.
+
+Your job is to identify:
+
+1. The category where the user spends the most.
+2. A category where the user may have an opportunity to save.
+3. Why that category is worth reviewing.
+4. Give friendly, practical advice.
+
+Important rules:
+
+- Do not invent numbers.
+- Do not perform your own financial calculations.
+- Use only the numbers provided.
+- Do not shame the user.
+- Do not assume that high spending automatically means bad spending.
+- Consider spending changes and patterns when deciding where the user
+  may have an opportunity to save.
+- Return valid JSON only.
+
+Return exactly this structure:
+
+{
+  "highestSpendingCategory": {
+    "category": "Food",
+    "amount": 6200,
+    "reason": "..."
+  },
+  "savingOpportunity": {
+    "category": "Food",
+    "reason": "...",
+    "potentialAction": "..."
+  },
+  "pennyAdvice": "..."
+}
+`;
+
+    const userPrompt = `
+Here is FinPal's calculated financial analysis:
+
+${JSON.stringify(analytics, null, 2)}
+
+Analyze this data and return the requested JSON.
+`;
+
+    const rawResponse = await askOllama({
+        systemPrompt,
+        userPrompt,
+        json: true
+    });
+
+    let result;
+
+    try {
+        result = JSON.parse(rawResponse);
+    } catch {
+        throw new Error("Ollama returned invalid JSON.");
+    }
+
+    return result;
+}
+
+
+module.exports = {
+    askOllama,
+    categorizeTransaction,
+    analyzeFinancialBehavior
+};

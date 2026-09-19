@@ -6,8 +6,52 @@ const {
     createImportBatch,
 } = require("../services/importBatchService");
 const {
-    categorizeTransaction
+    categorizeTransaction,
+    analyzeFinancialBehavior
 } = require("../services/categorizationLlmService");
+const {
+    calculateAnalytics
+} = require("../services/analyticsService");
+
+async function generateAnalytics(req, res, next) {
+    try {
+        const {
+            transactions,
+            currentMonth,
+            previousMonth
+        } = req.body;
+
+        if (!Array.isArray(transactions)) {
+            return res.status(400).json({
+                success: false,
+                message: "Transactions array is required."
+            });
+        }
+
+        const analytics = calculateAnalytics(
+            transactions,
+            {
+                currentMonth,
+                previousMonth
+            }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Analytics calculated successfully.",
+            analytics
+        });
+
+    } catch (error) {
+        console.error(
+            "Analytics generation error:",
+            error
+        );
+
+        next(error);
+    }
+}
+
 async function analyzeStatement(req, res, next) {
     try {
         const { text, fileName } = req.body;
@@ -103,7 +147,35 @@ async function categorizeTransactions(req, res, next) {
     }
 }
 
+async function generateInsights(req, res, next) {
+    try {
+        const analytics = req.body;
+
+        if (!analytics || typeof analytics !== "object") {
+            return res.status(400).json({
+                success: false,
+                message: "Analytics data is required."
+            });
+        }
+
+        const insights = await analyzeFinancialBehavior(analytics);
+
+        return res.status(200).json({
+            success: true,
+            message: "Financial insights generated successfully.",
+            insights
+        });
+
+    } catch (error) {
+        console.error("Insight generation error:", error);
+
+        next(error);
+    }
+}
+
 module.exports = {
     analyzeStatement,
-    categorizeTransactions
+    categorizeTransactions,
+    generateAnalytics,
+    generateInsights
 };
