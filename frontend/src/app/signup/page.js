@@ -44,26 +44,30 @@ export default function SignupPage() {
 
   return (
     <div className="relative h-screen max-h-screen w-full bg-[#FAF9FF] text-[#5B3F91] flex flex-col justify-between overflow-hidden font-sans select-none">
-      {/* Background Soft Lavender Patches */}
+      {/* Pretty Soft Lavender & Blush Pink Patches */}
       <div className="absolute -top-16 -left-16 w-80 h-80 bg-[#EAE3FA] rounded-full blur-3xl opacity-60 pointer-events-none" />
-      <div className="absolute top-1/4 -right-12 w-96 h-96 bg-[#C9B9F2] rounded-full blur-3xl opacity-40 pointer-events-none" />
-      <div className="absolute top-1/2 right-1/4 w-80 h-80 bg-[#EAE3FA] rounded-full blur-3xl opacity-35 pointer-events-none" />
-      <div className="absolute -bottom-16 left-1/3 w-80 h-80 bg-[#C9B9F2] rounded-full blur-3xl opacity-30 pointer-events-none" />
-      <div className="absolute top-1/3 -left-20 w-72 h-72 bg-[#EAE3FA] rounded-full blur-3xl opacity-40 pointer-events-none" />
+      <div className="absolute top-10 right-1/3 w-72 h-72 bg-[#F6C9D5] rounded-full blur-3xl opacity-35 pointer-events-none" />
+      <div className="absolute top-1/4 -right-12 w-96 h-96 bg-[#C9B9F2] rounded-full blur-3xl opacity-45 pointer-events-none" />
+      <div className="absolute top-1/2 right-1/4 w-80 h-80 bg-[#EAE3FA] rounded-full blur-3xl opacity-40 pointer-events-none" />
+      <div className="absolute -bottom-16 left-1/3 w-80 h-80 bg-[#C9B9F2] rounded-full blur-3xl opacity-35 pointer-events-none" />
+      <div className="absolute top-1/3 -left-20 w-72 h-72 bg-[#EAE3FA] rounded-full blur-3xl opacity-45 pointer-events-none" />
+      <div className="absolute bottom-10 right-10 w-64 h-64 bg-[#F6C9D5] rounded-full blur-3xl opacity-30 pointer-events-none" />
 
       {/* Top Header */}
       <header className="relative z-10 flex items-center justify-between px-6 sm:px-12 py-3 sm:py-4 w-full max-w-7xl mx-auto shrink-0">
         {/* Brand Logo */}
         <div className="flex items-center">
-          <Image
-            src="/logoo.png"
-            alt="PennyPal Logo"
-            width={190}
-            height={70}
-            style={{ width: "auto", height: "auto" }}
-            className="h-12 sm:h-13 object-contain"
-            priority
-          />
+          <Link href="/">
+            <Image
+              src="/logoo.png"
+              alt="PennyPal Logo"
+              width={190}
+              height={70}
+              style={{ width: "auto", height: "auto" }}
+              className="h-12 sm:h-13 object-contain cursor-pointer"
+              priority
+            />
+          </Link>
         </div>
 
         {/* Top Right Handwritten Tagline */}
@@ -101,7 +105,7 @@ export default function SignupPage() {
                   <path d="M8 25L15 19" />
                 </svg>
 
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-[#5B3F91] leading-tight">
+                <h1 className="font-handwritten text-3xl sm:text-4xl font-bold text-[#5B3F91] leading-tight">
                   Create your PennyPal account
                 </h1>
 
