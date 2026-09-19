@@ -205,8 +205,6 @@ export default function UploadPage() {
       const batch = data.batch || { id: crypto.randomUUID(), fileName: file.name };
       setCurrentBatchId(batch.id);
 
-      // (We skip stageImportBatch here. Categorization and DB save happens on Confirm)
-
 
       // 4. Run duplicate detection against active transactions in IndexedDB
       const duplicateScores = await detectPossibleDuplicates(candidateTransactions);
@@ -255,32 +253,7 @@ export default function UploadPage() {
       }));
 
       const batchId = currentBatchId || crypto.randomUUID();
-      const batchInfo = { id: batchId, fileName: fileName || "Uploaded Statement" };
-
-      // 1. Call the AI Categorization API
-      const token = getAuthToken() || "";
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
-
-      const catRes = await fetch(`${backendUrl}/api/analyze/categorize`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ transactions: canonical }),
-      });
-
-      if (!catRes.ok) {
-        throw new Error("Failed to categorize transactions via AI.");
-      }
-
-      const catData = await catRes.json();
-      const categorizedTransactions = catData.transactions || canonical;
-
-      // 2. Stage and then immediately confirm into IndexedDB
-      await stageImportBatch(batchInfo, categorizedTransactions);
-      await confirmImportBatch(batchId, categorizedTransactions);
-
+      await confirmImportBatch(batchId, canonical);
       await loadActiveTransactions();
       setStep("success");
     } catch (err) {
@@ -387,28 +360,6 @@ export default function UploadPage() {
       importBatchId: batchId,
     };
 
-    // Stage in IndexedDB with status: 'pending_review' so it NEVER shows as active before confirmation!
-    try {
-      const vaultId = getVaultId();
-      await db.transactions.put({
-        id: created.id,
-        vaultId,
-        date: created.date,
-        merchant: created.desc,
-        amount: created.amount,
-        type: created.type.toLowerCase(),
-        category: created.category,
-        source: created.source,
-        originalMerchant: created.desc,
-        importBatchId: batchId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })
-
-      // We no longer db.transactions.put here. It stays in memory until Confirm!
-    } catch (err) {
-      console.warn("Manual transaction error:", err);
-    }
 
     const updatedList = [created, ...transactions];
     setTransactions(updatedList);
