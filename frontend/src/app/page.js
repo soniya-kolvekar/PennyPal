@@ -74,7 +74,10 @@ export default function LandingPage() {
           </Link>
 
           {/* Navigation Links */}
-          <div className="hidden md:flex items-center gap-10 text-base sm:text-lg font-bold text-[#5B3F91]">
+          <div className="hidden md:flex items-center gap-8 text-base sm:text-lg font-bold text-[#5B3F91]">
+            <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
+              Upload Statement
+            </Link>
             <a href="#features" className="hover:text-[#8064C8] transition-colors">
               Features
             </a>
