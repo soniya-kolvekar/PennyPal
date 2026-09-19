@@ -3,6 +3,8 @@
 import { useState, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { db } from "../../../lib/db";
+import { useLiveQuery } from "dexie-react-hooks";
 import {
   ChevronLeft,
   ChevronRight,
@@ -11,7 +13,6 @@ import {
   Target,
   Repeat,
   TrendingUp,
-  Sparkles,
   ShoppingBag,
   Utensils,
   Car,
@@ -58,78 +59,7 @@ function getCategoryIcon(category) {
   }
 }
 
-// Sample Data for September 2026
-const SEPTEMBER_2026_DATA = {
-  1: { spent: 450, expenses: [{ desc: "Swiggy Food Delivery", cat: "Food", amount: 450 }] },
-  2: { spent: 800, expenses: [{ desc: "Amazon Essentials", cat: "Shopping", amount: 800 }] },
-  4: { spent: 200, expenses: [{ desc: "Local Grocery", cat: "Food", amount: 200 }] },
-  7: { spent: 300, expenses: [{ desc: "Uber Auto Ride", cat: "Transport", amount: 300 }] },
-  9: { spent: 1200, expenses: [{ desc: "Laptop Stand", cat: "Shopping", amount: 1200 }] },
-  12: { spent: 600, expenses: [{ desc: "Weekend Movie Ticket", cat: "Entertainment", amount: 600 }] },
-  15: { spent: 450, expenses: [{ desc: "Zomato Gourmet Lunch", cat: "Food", amount: 450 }] },
-  18: { spent: 300, expenses: [{ desc: "Pharmacy Medicine", cat: "Healthcare", amount: 300 }] },
-  21: {
-    spent: 300,
-    expenses: [{ desc: "Artisan Coffee", cat: "Food", amount: 300 }],
-    challenge: { title: "No Food Delivery Challenge", xp: 50, status: "Completed ✓" }
-  },
-  22: { spent: 700, expenses: [{ desc: "Dinner with Friends", cat: "Food", amount: 700 }] },
-  23: { spent: 250, expenses: [{ desc: "Metro Recharge", cat: "Transport", amount: 250 }] },
-  24: {
-    spent: 2498,
-    expenses: [
-      { desc: "Amazon India", cat: "Shopping", amount: 1200 },
-      { desc: "Swiggy", cat: "Food", amount: 450 },
-      { desc: "Uber Ride", cat: "Transport", amount: 199 },
-      { desc: "Netflix Subscription", cat: "Subscriptions", amount: 649, isRecurring: true }
-    ],
-    pennyCheckIn: {
-      question: "How are we doing this week?",
-      options: ["I'm doing good", "I need help"]
-    }
-  },
-  27: {
-    goal: { title: "Laptop Goal", savedAmount: 20000, progressPct: 50 }
-  },
-  30: {
-    income: 50000,
-    incomeDetails: [{ desc: "Monthly Salary Credit", cat: "Salary", amount: 50000 }],
-    spent: 1200,
-    expenses: [{ desc: "Electricity Utility Bill", cat: "Bills", amount: 1200 }]
-  }
-};
-
-// Sample Data for October 2026
-const OCTOBER_2026_DATA = {
-  3: { spent: 550, expenses: [{ desc: "Cinema Movie & Snacks", cat: "Entertainment", amount: 550 }] },
-  8: { spent: 1450, expenses: [{ desc: "Autumn Wear Shopping", cat: "Shopping", amount: 1450 }] },
-  14: { spent: 320, expenses: [{ desc: "City Cab Ride", cat: "Transport", amount: 320 }] },
-  20: { spent: 850, expenses: [{ desc: "Dinner Buffet", cat: "Food", amount: 850 }] },
-  24: {
-    spent: 649,
-    expenses: [{ desc: "Netflix Subscription", cat: "Subscriptions", amount: 649, isRecurring: true }]
-  },
-  28: { goal: { title: "Vacation Savings Goal", savedAmount: 15000, progressPct: 40 } },
-  31: {
-    income: 55000,
-    incomeDetails: [{ desc: "Monthly Salary Credit", cat: "Salary", amount: 55000 }]
-  }
-};
-
-// Sample Data for August 2026
-const AUGUST_2026_DATA = {
-  5: { spent: 900, expenses: [{ desc: "Summer Event Pass", cat: "Entertainment", amount: 900 }] },
-  12: { spent: 2100, expenses: [{ desc: "Running Sneakers", cat: "Shopping", amount: 2100 }] },
-  18: { spent: 450, expenses: [{ desc: "Swiggy Dinner", cat: "Food", amount: 450 }] },
-  24: {
-    spent: 649,
-    expenses: [{ desc: "Netflix Subscription", cat: "Subscriptions", amount: 649, isRecurring: true }]
-  },
-  31: {
-    income: 50000,
-    incomeDetails: [{ desc: "Monthly Salary Credit", cat: "Salary", amount: 50000 }]
-  }
-};
+// Removed hardcoded datasets
 
 // Helper to compute dynamic color heat map style for a calendar day cell
 function getCellHeatMapStyle(dayData, isSelected, isToday) {
@@ -140,12 +70,17 @@ function getCellHeatMapStyle(dayData, isSelected, isToday) {
   const spent = dayData?.spent || 0;
   const income = dayData?.income || 0;
 
-  // 1. Heavy Expenses Day (> ₹1,500): Darker red tint
-  if (spent > 1500) {
+  // 1. Extreme Expenses Day (> ₹3,000): Darkest red tint
+  if (spent > 3000) {
+    return "bg-rose-200/90 border-rose-400 hover:bg-rose-300/90 text-rose-950 shadow-sm";
+  }
+
+  // 2. Heavy Expenses Day (> ₹1,000 && <= ₹3,000): Medium red tint
+  if (spent > 1000) {
     return "bg-rose-100/90 border-rose-300 hover:bg-rose-200/90 text-rose-900 shadow-xs";
   }
 
-  // 2. Light / Moderate Expenses Day (> 0 && <= ₹1,500): Light red tint
+  // 3. Light Expenses Day (> 0 && <= ₹1,000): Light red tint
   if (spent > 0) {
     return "bg-rose-50/80 border-rose-200 hover:bg-rose-100/80 text-rose-700 shadow-xs";
   }
@@ -195,33 +130,47 @@ export default function CalendarPage() {
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
 
+  // Fetch transactions from IndexedDB for the selected month
+  const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+  const endStr = `${year}-${String(month + 1).padStart(2, '0')}-31`;
+
+  const transactions = useLiveQuery(
+    () => db.transactions
+      .where('date')
+      .between(startStr, endStr, true, true)
+      .toArray(),
+    [year, month]
+  ) || [];
+
   const { gridCells, monthData } = useMemo(() => {
-    // 1. Determine dataset for view month
     let dataForMonth = {};
-    if (year === 2026 && month === 8) dataForMonth = SEPTEMBER_2026_DATA;
-    else if (year === 2026 && month === 9) dataForMonth = OCTOBER_2026_DATA;
-    else if (year === 2026 && month === 7) dataForMonth = AUGUST_2026_DATA;
-    else {
-      // Dynamic fallback data generator for any other month
-      for (let d = 1; d <= 31; d++) {
-        if (d % 6 === 0) {
-          dataForMonth[d] = {
-            spent: d * 35,
-            expenses: [{ desc: `Day ${d} Coffee & Snacks`, cat: "Food", amount: d * 35 }]
-          };
-        }
-        if (d === 24) {
-          dataForMonth[d] = {
-            spent: 649,
-            expenses: [{ desc: "Netflix Subscription", cat: "Subscriptions", amount: 649, isRecurring: true }]
-          };
-        }
-        if (d === 28) {
-          dataForMonth[d] = {
-            income: 50000,
-            incomeDetails: [{ desc: "Salary Deposit", cat: "Salary", amount: 50000 }]
-          };
-        }
+
+    // Group transactions by day
+    for (const tx of transactions) {
+      // Only include active or reconciled transactions in calendar calculations
+      if (tx.status !== 'active' && tx.status !== 'reconciled') continue;
+
+      const day = parseInt(tx.date.split('-')[2], 10);
+
+      if (!dataForMonth[day]) {
+        dataForMonth[day] = { spent: 0, expenses: [], income: 0, incomeDetails: [] };
+      }
+
+      if (tx.type === 'expense') {
+        dataForMonth[day].spent += Number(tx.amount);
+        dataForMonth[day].expenses.push({
+          desc: tx.merchant,
+          cat: tx.category,
+          amount: Number(tx.amount),
+          isRecurring: tx.isRecurring // If available
+        });
+      } else if (tx.type === 'income') {
+        dataForMonth[day].income += Number(tx.amount);
+        dataForMonth[day].incomeDetails.push({
+          desc: tx.merchant,
+          cat: tx.category,
+          amount: Number(tx.amount)
+        });
       }
     }
 
@@ -260,7 +209,7 @@ export default function CalendarPage() {
       gridCells: [...prevCells, ...currentCells, ...nextCells],
       monthData: dataForMonth
     };
-  }, [year, month]);
+  }, [year, month, transactions]);
 
   // Selected Day Data
   const selectedData = monthData[selectedDay] || null;
@@ -318,7 +267,7 @@ export default function CalendarPage() {
 
       {/* MAIN CONTAINER */}
       <main className="relative z-10 max-w-5xl w-full mx-auto px-6 sm:px-12 py-8 flex flex-col gap-8">
-        
+
         {/* 1. HEADER SECTION */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
@@ -373,7 +322,7 @@ export default function CalendarPage() {
 
         {/* 2. REAL CALENDAR GRID */}
         <div className="p-6 bg-white/95 backdrop-blur-sm rounded-3xl border border-[#EAE3FA] shadow-lg">
-          
+
           {/* Days of Week Header */}
           <div className="grid grid-cols-7 gap-2 mb-3 text-center">
             {["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((day) => (
@@ -417,13 +366,12 @@ export default function CalendarPage() {
                   {/* Top Row: Date Number & Special Event Badges */}
                   <div className="flex items-center justify-between">
                     <span
-                      className={`text-xs font-extrabold px-1.5 py-0.5 rounded-md ${
-                        isToday
+                      className={`text-xs font-extrabold px-1.5 py-0.5 rounded-md ${isToday
                           ? "bg-[#8064C8] text-white"
                           : isSelected
-                          ? "text-[#8064C8] font-black"
-                          : "text-[#5B3F91]"
-                      }`}
+                            ? "text-[#8064C8] font-black"
+                            : "text-[#5B3F91]"
+                        }`}
                     >
                       {dayNum}
                     </span>
@@ -461,9 +409,8 @@ export default function CalendarPage() {
                       </p>
                     )}
                     {dayData?.spent && (
-                      <p className={`text-[10px] sm:text-xs font-extrabold ${
-                        dayData.spent > 1500 ? "text-rose-900 font-black" : "text-rose-700"
-                      }`}>
+                      <p className={`text-[10px] sm:text-xs font-extrabold ${dayData.spent > 1500 ? "text-rose-900 font-black" : "text-rose-700"
+                        }`}>
                         {formatCompactAmount(dayData.spent)}
                       </p>
                     )}
@@ -473,7 +420,6 @@ export default function CalendarPage() {
             })}
           </div>
 
-          {/* SPENDING COLOR LEGEND BAR */}
           <div className="flex flex-wrap items-center justify-end gap-4 text-xs font-semibold text-[#5B3F91]/80 mt-4 pt-3 border-t border-[#EAE3FA]">
             <div className="flex items-center gap-1.5">
               <span className="w-3.5 h-3.5 bg-emerald-50 border border-emerald-300 rounded-md shadow-2xs" />
@@ -481,11 +427,15 @@ export default function CalendarPage() {
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3.5 h-3.5 bg-rose-50 border border-rose-200 rounded-md shadow-2xs" />
-              <span>Light Expense (&le; ₹1,500)</span>
+              <span>Light Expense (&le; ₹1,000)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3.5 h-3.5 bg-rose-100 border border-rose-300 rounded-md shadow-2xs" />
-              <span>Heavy Expense (&gt; ₹1,500)</span>
+              <span>Medium Expense (&le; ₹3,000)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 bg-rose-200 border border-rose-400 rounded-md shadow-2xs" />
+              <span>Heavy Expense (&gt; ₹3,000)</span>
             </div>
           </div>
 
@@ -493,7 +443,7 @@ export default function CalendarPage() {
 
         {/* 3. SELECTED DATE DETAILS PANEL */}
         <div className="p-6 sm:p-8 bg-white/95 backdrop-blur-sm rounded-3xl border border-[#EAE3FA] shadow-lg flex flex-col gap-6 animate-fade-in">
-          
+
           {/* Header for Selected Date */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[#EAE3FA]">
             <div>
@@ -536,7 +486,7 @@ export default function CalendarPage() {
           {/* Selected Day Content Sections */}
           {selectedData && (
             <div className="space-y-6">
-              
+
               {/* INCOME SECTION (If Any) */}
               {selectedData.incomeDetails && selectedData.incomeDetails.length > 0 && (
                 <div>
