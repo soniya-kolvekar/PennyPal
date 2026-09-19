@@ -44,20 +44,6 @@ import {
   getVaultId
 } from "../../../lib/vault";
 
-const INITIAL_TRANSACTIONS = [
-  { id: "1", date: "Sep 01", desc: "SWIGGY FOOD DELIVERY", amount: 450, type: "Expense", category: "Food & Dining" },
-  { id: "2", date: "Sep 02", desc: "AMAZON INDIA", amount: 1800, type: "Expense", category: "Shopping" },
-  { id: "3", date: "Sep 03", desc: "MONTHLY SALARY CREDIT", amount: 50000, type: "Income", category: "Salary" },
-  { id: "4", date: "Sep 04", desc: "UBER RIDE", amount: 320, type: "Expense", category: "Travel" },
-  { id: "5", date: "Sep 05", desc: "STARBUCKS COFFEE", amount: 280, type: "Expense", category: "Food & Dining" },
-  { id: "6", date: "Sep 06", desc: "NETFLIX SUBSCRIPTION", amount: 499, type: "Expense", category: "Entertainment" },
-  { id: "7", date: "Sep 08", desc: "GROCERY SUPERMARKET", amount: 2450, type: "Expense", category: "Groceries" },
-  { id: "8", date: "Sep 10", desc: "ELECTRICITY BILL", amount: 1650, type: "Expense", category: "Utilities" },
-  { id: "9", date: "Sep 12", desc: "ZOMATO GOURMET", amount: 620, type: "Expense", category: "Food & Dining" },
-  { id: "10", date: "Sep 14", desc: "FREELANCE DESIGN FEE", amount: 12500, type: "Income", category: "Income" },
-  { id: "11", date: "Sep 16", desc: "BOOKMYSHOW MOVIES", amount: 750, type: "Expense", category: "Entertainment" },
-  { id: "12", date: "Sep 18", desc: "PHARMACY MEDICAL", amount: 430, type: "Expense", category: "Health" }
-];
 
 const CATEGORIES = [
   "Food & Dining",
