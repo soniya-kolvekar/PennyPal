@@ -66,15 +66,32 @@ async function extractTextFromPDF(file) {
       const page = await pdfDoc.getPage(pageNum);
       const textContent = await page.getTextContent();
       
-      const pageStrings = textContent.items
-        .map((item) => item.str)
-        .filter(Boolean);
+      let pageText = "";
+      let lastY = null;
 
-      fullText += pageStrings.join(" ") + "\n";
+      for (const item of textContent.items) {
+        if (!item.str && !item.hasEOL) continue;
+        
+        const currentY = item.transform ? item.transform[5] : null;
+
+        // If the vertical line coordinate changed significantly, start a new row
+        if (lastY !== null && currentY !== null && Math.abs(currentY - lastY) > 5) {
+          pageText += "\n";
+        } else if (item.hasEOL) {
+          pageText += "\n";
+        } else if (pageText.length > 0 && !pageText.endsWith("\n") && !pageText.endsWith(" ")) {
+          pageText += " ";
+        }
+
+        pageText += item.str;
+        lastY = currentY;
+      }
+
+      fullText += pageText + "\n";
     }
 
     if (!fullText || fullText.trim().length === 0) {
-      throw new Error("Could not extract any text from this PDF. It might be a scanned image.");
+      throw new Error("Could not extract any text from this PDF. It might be an image-only scan.");
     }
 
     return fullText;

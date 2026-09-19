@@ -395,7 +395,7 @@ export default function ChatPage() {
                             <div className="w-10 h-10 rounded-2xl bg-[#EAE3FA] flex items-center justify-center overflow-hidden shadow-xs shrink-0 p-0.5">
 
                                 <Image
-                                    src="/penny.png"
+                                    src="/boty.png"
                                     alt="Penny Mascot"
                                     width={40}
                                     height={40}
@@ -471,7 +471,7 @@ export default function ChatPage() {
                                     <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-[#EAE3FA] flex items-center justify-center overflow-hidden mb-3 shadow-inner p-1">
 
                                         <Image
-                                            src="/penny.png"
+                                            src="/boty.png"
                                             alt="Penny Mascot"
                                             width={96}
                                             height={96}
@@ -574,7 +574,7 @@ export default function ChatPage() {
                                                 <div className="w-6 h-6 rounded-full bg-[#EAE3FA] flex items-center justify-center overflow-hidden shrink-0 mt-0.5 p-0.5">
 
                                                     <Image
-                                                        src="/penny.png"
+                                                        src="/boty.png"
                                                         alt="Penny"
                                                         width={24}
                                                         height={24}
@@ -602,7 +602,7 @@ export default function ChatPage() {
                                     <div className="w-6 h-6 rounded-full bg-[#EAE3FA] flex items-center justify-center overflow-hidden shrink-0 p-0.5">
 
                                         <Image
-                                            src="/penny.png"
+                                            src="/boty.png"
                                             alt="Penny Thinking"
                                             width={24}
                                             height={24}
