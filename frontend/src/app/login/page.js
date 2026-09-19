@@ -3,26 +3,43 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
+import { signin } from "../../../lib/auth";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Login submitted:", { email, password });
+    setError("");
+    setLoading(true);
+
+    const res = await signin(email, password);
+    setLoading(false);
+
+    if (res.success) {
+      router.push("/");
+    } else {
+      setError(res.error);
+    }
   };
 
   return (
     <div className="relative h-screen max-h-screen w-full bg-[#FAF9FF] text-[#5B3F91] flex flex-col justify-between overflow-hidden font-sans select-none">
-      {/* Background Soft Lavender Patches */}
+      {/* Pretty Soft Lavender & Blush Pink Patches */}
       <div className="absolute -top-16 -left-16 w-80 h-80 bg-[#EAE3FA] rounded-full blur-3xl opacity-60 pointer-events-none" />
-      <div className="absolute top-1/4 -right-12 w-96 h-96 bg-[#C9B9F2] rounded-full blur-3xl opacity-40 pointer-events-none" />
-      <div className="absolute top-1/2 right-1/4 w-80 h-80 bg-[#EAE3FA] rounded-full blur-3xl opacity-35 pointer-events-none" />
-      <div className="absolute -bottom-16 left-1/3 w-80 h-80 bg-[#C9B9F2] rounded-full blur-3xl opacity-30 pointer-events-none" />
-      <div className="absolute top-1/3 -left-20 w-72 h-72 bg-[#EAE3FA] rounded-full blur-3xl opacity-40 pointer-events-none" />
+      <div className="absolute top-10 right-1/3 w-72 h-72 bg-[#F6C9D5] rounded-full blur-3xl opacity-35 pointer-events-none" />
+      <div className="absolute top-1/4 -right-12 w-96 h-96 bg-[#C9B9F2] rounded-full blur-3xl opacity-45 pointer-events-none" />
+      <div className="absolute top-1/2 right-1/4 w-80 h-80 bg-[#EAE3FA] rounded-full blur-3xl opacity-40 pointer-events-none" />
+      <div className="absolute -bottom-16 left-1/3 w-80 h-80 bg-[#C9B9F2] rounded-full blur-3xl opacity-35 pointer-events-none" />
+      <div className="absolute top-1/3 -left-20 w-72 h-72 bg-[#EAE3FA] rounded-full blur-3xl opacity-45 pointer-events-none" />
+      <div className="absolute bottom-10 right-10 w-64 h-64 bg-[#F6C9D5] rounded-full blur-3xl opacity-30 pointer-events-none" />
 
       {/* Top Header */}
       <header className="relative z-10 flex items-center justify-between px-6 sm:px-12 py-3 sm:py-4 w-full max-w-7xl mx-auto shrink-0">
@@ -76,7 +93,7 @@ export default function LoginPage() {
                   <path d="M8 25L15 19" />
                 </svg>
 
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-[#5B3F91] leading-tight">
+                <h1 className="font-handwritten text-3xl sm:text-4xl font-bold text-[#5B3F91] leading-tight">
                   Welcome back to PennyPal
                 </h1>
 
@@ -101,6 +118,14 @@ export default function LoginPage() {
                 className="inline-block h-4 w-auto object-contain"
               />
             </p>
+
+            {/* Error Message Banner */}
+            {error && (
+              <div className="mb-3 p-3 bg-[#FDF2F4] border border-[#F6C9D5] rounded-2xl text-xs text-[#B93856] flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#B93856]" />
+                <span>{error}</span>
+              </div>
+            )}
 
             {/* Sign in form */}
             <form onSubmit={handleSubmit} className="space-y-3">
@@ -140,7 +165,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 text-[#A98FE3] hover:text-[#8064C8] transition-colors focus:outline-none"
+                    className="absolute right-3.5 text-[#A98FE3] hover:text-[#8064C8] transition-colors focus:outline-none cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -150,10 +175,20 @@ export default function LoginPage() {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full mt-1 py-3 px-6 bg-[#8064C8] hover:bg-[#6F53B7] active:scale-[0.99] text-white font-semibold rounded-full shadow-md shadow-[#8064C8]/30 flex items-center justify-center gap-2 transition-all cursor-pointer text-sm"
+                disabled={loading}
+                className="w-full mt-1 py-3 px-6 bg-[#8064C8] hover:bg-[#6F53B7] disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99] text-white font-semibold rounded-full shadow-md shadow-[#8064C8]/30 flex items-center justify-center gap-2 transition-all cursor-pointer text-sm"
               >
-                <span>Sign In</span>
-                <ArrowRight className="w-4 h-4" />
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
 
