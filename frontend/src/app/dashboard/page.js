@@ -252,6 +252,12 @@ export default function DashboardPage() {
             <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
               Upload
             </Link>
+            <Link href="/settings" className="hover:text-[#8064C8] transition-colors">
+              Settings
+            </Link>
+            <Link href="/chat" className="hover:text-[#8064C8] transition-colors">
+              Chat
+            </Link>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -521,6 +527,14 @@ export default function DashboardPage() {
                     <span>No expenses recorded yet for {monthNameYear}! Upload your bank statement to see smart automated insights.</span>
                   )}
                 </p>
+
+                <Link
+                  href="/chat"
+                  className="mt-3.5 w-full py-2 px-3 bg-[#8064C8] hover:bg-[#6F53B7] text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Talk with Penny about this →</span>
+                </Link>
               </div>
             </div>
 
@@ -696,6 +710,8 @@ export default function DashboardPage() {
             <Link href="/dashboard" className="hover:text-[#8064C8]">Dashboard</Link>
             <Link href="/calendar" className="hover:text-[#8064C8]">Calendar</Link>
             <Link href="/upload" className="hover:text-[#8064C8]">Upload</Link>
+            <Link href="/settings" className="hover:text-[#8064C8]">Settings</Link>
+            <Link href="/chat" className="hover:text-[#8064C8]">Chat</Link>
           </div>
         </div>
       </footer>

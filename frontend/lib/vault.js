@@ -507,3 +507,269 @@ export async function detectPossibleDuplicates(candidates = []) {
     };
   });
 }
+
+// =========================================================================
+// BACKUP & RESTORE UTILITIES (Scoped to current vaultId)
+// =========================================================================
+
+/**
+ * Collect all records belonging to the current user's vault for backup.
+ */
+export async function exportVaultData() {
+  const vaultId = getVaultId();
+
+  const [transactions, importBatches, goals, achievements, userProgress, settings, chatMessages] =
+    await Promise.all([
+      db.transactions.where("vaultId").equals(vaultId).toArray(),
+      db.importBatches.where("vaultId").equals(vaultId).toArray(),
+      db.goals.where("vaultId").equals(vaultId).toArray(),
+      db.achievements.where("vaultId").equals(vaultId).toArray(),
+      db.userProgress.where("vaultId").equals(vaultId).toArray(),
+      db.settings.where("vaultId").equals(vaultId).toArray(),
+      db.chatMessages.where("vaultId").equals(vaultId).toArray(),
+    ]);
+
+  return {
+    app: "PennyPal",
+    format: "finpal",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    vault: {
+      transactions,
+      importBatches,
+      goals,
+      achievements,
+      userProgress,
+      settings,
+      chatMessages,
+    },
+  };
+}
+
+/**
+ * Restore an imported vault payload into the current user's local vault.
+ * @param {Object} payload - The decrypted backup payload containing { vault: { ... } }
+ * @param {Object} options - { mode: "merge" | "replace" }
+ */
+export async function restoreVaultData(payload, options = { mode: "merge" }) {
+  const vaultId = getVaultId();
+  const { mode = "merge" } = options;
+  const vault = payload?.vault;
+
+  if (!vault || !Array.isArray(vault.transactions)) {
+    throw new Error("Invalid backup data: missing transactions array.");
+  }
+
+  return await db.transaction(
+    "rw",
+    [
+      db.transactions,
+      db.importBatches,
+      db.goals,
+      db.achievements,
+      db.userProgress,
+      db.settings,
+      db.chatMessages,
+    ],
+    async () => {
+      // 1. If replace mode, clear all existing data for this vault
+      if (mode === "replace") {
+        await Promise.all([
+          db.transactions.where("vaultId").equals(vaultId).delete(),
+          db.importBatches.where("vaultId").equals(vaultId).delete(),
+          db.goals.where("vaultId").equals(vaultId).delete(),
+          db.achievements.where("vaultId").equals(vaultId).delete(),
+          db.userProgress.where("vaultId").equals(vaultId).delete(),
+          db.settings.where("vaultId").equals(vaultId).delete(),
+          db.chatMessages.where("vaultId").equals(vaultId).delete(),
+        ]);
+      }
+
+      // Existing transaction IDs for deduplication in merge mode
+      const existingTxs = await db.transactions.where("vaultId").equals(vaultId).toArray();
+      const existingIdSet = new Set(existingTxs.map((t) => t.id));
+      const existingSigSet = new Set(
+        existingTxs.map((t) => `${t.date}_${t.amount}_${(t.merchant || "").toLowerCase().trim()}`)
+      );
+
+      let importedTxCount = 0;
+      let skippedTxCount = 0;
+
+      // 2. Prepare transactions with current vaultId
+      const txsToInsert = [];
+      for (const rawTx of vault.transactions) {
+        const txSig = `${rawTx.date}_${rawTx.amount}_${(rawTx.merchant || rawTx.desc || "").toLowerCase().trim()}`;
+
+        if (mode === "merge" && (existingIdSet.has(rawTx.id) || existingSigSet.has(txSig))) {
+          skippedTxCount++;
+          continue;
+        }
+
+        const safeTx = {
+          ...rawTx,
+          id: rawTx.id || crypto.randomUUID(),
+          vaultId,
+          merchant: rawTx.merchant || rawTx.desc || "Transaction",
+          amount: Number(rawTx.amount),
+          type: rawTx.type?.toLowerCase() === "income" ? "income" : "expense",
+          category: rawTx.category || "Other",
+          status: rawTx.status || "active",
+          source: rawTx.source || "backup_restore",
+          updatedAt: new Date().toISOString(),
+        };
+
+        txsToInsert.push(safeTx);
+        existingIdSet.add(safeTx.id);
+        existingSigSet.add(txSig);
+        importedTxCount++;
+      }
+
+      if (txsToInsert.length > 0) {
+        await db.transactions.bulkPut(txsToInsert);
+      }
+
+      // 3. Restore secondary collections if present
+      if (Array.isArray(vault.goals) && vault.goals.length > 0) {
+        const goalsToPut = vault.goals.map((g) => ({ ...g, vaultId }));
+        await db.goals.bulkPut(goalsToPut);
+      }
+      if (Array.isArray(vault.achievements) && vault.achievements.length > 0) {
+        const achToPut = vault.achievements.map((a) => ({ ...a, vaultId }));
+        await db.achievements.bulkPut(achToPut);
+      }
+      if (Array.isArray(vault.userProgress) && vault.userProgress.length > 0) {
+        const progToPut = vault.userProgress.map((p) => ({ ...p, vaultId }));
+        await db.userProgress.bulkPut(progToPut);
+      }
+      if (Array.isArray(vault.importBatches) && vault.importBatches.length > 0) {
+        const batchesToPut = vault.importBatches.map((b) => ({ ...b, vaultId }));
+        await db.importBatches.bulkPut(batchesToPut);
+      }
+      if (Array.isArray(vault.chatMessages) && vault.chatMessages.length > 0) {
+        const msgsToPut = vault.chatMessages.map((m) => ({ ...m, vaultId }));
+        await db.chatMessages.bulkPut(msgsToPut);
+      }
+
+      return {
+        importedTxCount,
+        skippedTxCount,
+        totalTxsInBackup: vault.transactions.length,
+        mode,
+      };
+    }
+  );
+}
+
+/**
+ * Permanently purge all local financial records for the current vaultId.
+ */
+export async function clearLocalVaultData() {
+  const vaultId = getVaultId();
+
+  await db.transaction(
+    "rw",
+    [
+      db.transactions,
+      db.importBatches,
+      db.goals,
+      db.achievements,
+      db.userProgress,
+      db.settings,
+      db.chatMessages,
+    ],
+    async () => {
+      await Promise.all([
+        db.transactions.where("vaultId").equals(vaultId).delete(),
+        db.importBatches.where("vaultId").equals(vaultId).delete(),
+        db.goals.where("vaultId").equals(vaultId).delete(),
+        db.achievements.where("vaultId").equals(vaultId).delete(),
+        db.userProgress.where("vaultId").equals(vaultId).delete(),
+        db.settings.where("vaultId").equals(vaultId).delete(),
+        db.chatMessages.where("vaultId").equals(vaultId).delete(),
+      ]);
+    }
+  );
+
+  return true;
+}
+
+/**
+ * Compile a lightweight, privacy-preserving financial summary from IndexedDB
+ * for Penny the emotional financial therapist mascot companion.
+ */
+export async function getVaultFinancialContext() {
+  try {
+    const vaultId = getVaultId();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-31`;
+
+    const records = await db.transactions
+      .where("date")
+      .between(startStr, endStr, true, true)
+      .toArray();
+
+    const activeTxs = records.filter(
+      (tx) =>
+        (!tx.vaultId || tx.vaultId === vaultId) &&
+        (tx.status === "active" || tx.status === "reconciled")
+    );
+
+    const expenses = activeTxs.filter((t) => t.type?.toLowerCase() === "expense");
+    const incomeTxs = activeTxs.filter((t) => t.type?.toLowerCase() === "income");
+
+    const totalSpent = expenses.reduce((acc, t) => acc + Number(t.amount || 0), 0);
+    const totalIncome = incomeTxs.reduce((acc, t) => acc + Number(t.amount || 0), 0);
+    const netSavings = totalIncome - totalSpent;
+
+    // Category breakdown
+    const catMap = {};
+    expenses.forEach((t) => {
+      const cat = t.category || "Other";
+      catMap[cat] = (catMap[cat] || 0) + Number(t.amount || 0);
+    });
+
+    const topCategories = Object.keys(catMap)
+      .map((cat) => ({ category: cat, amount: catMap[cat] }))
+      .sort((a, b) => b.amount - a.amount);
+
+    // Recent 5 transactions
+    const recentTransactions = [...activeTxs]
+      .sort((a, b) => (b.date > a.date ? 1 : -1))
+      .slice(0, 5)
+      .map((t) => ({
+        date: t.date,
+        merchant: t.merchant || t.desc || "Item",
+        amount: Number(t.amount),
+        category: t.category || "Other",
+        type: t.type || "expense",
+      }));
+
+    return {
+      currentMonth: now.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+      totalTransactions: activeTxs.length,
+      totalSpentThisMonth: totalSpent,
+      totalIncomeThisMonth: totalIncome,
+      netSavingsThisMonth: netSavings,
+      topCategory: topCategories[0] || null,
+      topCategories: topCategories.slice(0, 5),
+      foodSpent: catMap["Food"] || 0,
+      shoppingSpent: catMap["Shopping"] || 0,
+      recentTransactions,
+    };
+  } catch {
+    return {
+      currentMonth: "Current Month",
+      totalTransactions: 0,
+      totalSpentThisMonth: 0,
+      totalIncomeThisMonth: 0,
+      netSavingsThisMonth: 0,
+      topCategories: [],
+      recentTransactions: [],
+    };
+  }
+}
+
