@@ -451,12 +451,15 @@ export default function UploadPage() {
             <Link href="/" className="hover:text-[#8064C8] transition-colors">
               Home
             </Link>
+            <Link href="/dashboard" className="hover:text-[#8064C8] transition-colors">
+              Dashboard
+            </Link>
+            <Link href="/calendar" className="hover:text-[#8064C8] transition-colors">
+              Calendar
+            </Link>
             <Link href="/upload" className="text-[#8064C8] transition-colors">
               Upload
             </Link>
-            <a href="#how-it-works" className="hover:text-[#8064C8] transition-colors">
-              How It Works
-            </a>
           </div>
 
           <div className="flex items-center gap-3">
@@ -1318,6 +1321,8 @@ export default function UploadPage() {
           </p>
           <div className="flex gap-6 text-xs font-semibold text-[#5B3F91]">
             <Link href="/" className="hover:text-[#8064C8]">Home</Link>
+            <Link href="/dashboard" className="hover:text-[#8064C8]">Dashboard</Link>
+            <Link href="/calendar" className="hover:text-[#8064C8]">Calendar</Link>
             <Link href="/upload" className="hover:text-[#8064C8]">Upload</Link>
           </div>
         </div>

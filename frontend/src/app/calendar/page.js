@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { db } from "../../../lib/db";
+import { getVaultId } from "../../../lib/vault";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   ChevronLeft,
@@ -99,9 +100,12 @@ function getCellHeatMapStyle(dayData, isSelected, isToday) {
 }
 
 export default function CalendarPage() {
-  // Current view date (Default: September 1, 2026)
-  const [viewDate, setViewDate] = useState(new Date(2026, 8, 1));
-  const [selectedDay, setSelectedDay] = useState(24);
+  // Current view date (defaults to current month, today's date)
+  const [viewDate, setViewDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
   const [pennyCheckInResponse, setPennyCheckInResponse] = useState(null);
 
   // Month navigation handlers
@@ -116,8 +120,9 @@ export default function CalendarPage() {
   };
 
   const handleToday = () => {
-    setViewDate(new Date(2026, 8, 1)); // Sep 2026
-    setSelectedDay(24);
+    const now = new Date();
+    setViewDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    setSelectedDay(now.getDate());
   };
 
   // Dynamic Month & Year string (e.g. "September 2026")
@@ -130,17 +135,27 @@ export default function CalendarPage() {
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
 
-  // Fetch transactions from IndexedDB for the selected month
-  const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-  const endStr = `${year}-${String(month + 1).padStart(2, '0')}-31`;
+  // Fetch transactions from IndexedDB for the selected month scoped to current vault
+  const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+  const endStr = `${year}-${String(month + 1).padStart(2, "0")}-31`;
 
-  const transactions = useLiveQuery(
-    () => db.transactions
-      .where('date')
-      .between(startStr, endStr, true, true)
-      .toArray(),
-    [year, month]
-  ) || [];
+  const liveTransactions = useLiveQuery(
+    async () => {
+      try {
+        const vaultId = getVaultId();
+        const records = await db.transactions
+          .where("date")
+          .between(startStr, endStr, true, true)
+          .toArray();
+        return records.filter((tx) => !tx.vaultId || tx.vaultId === vaultId);
+      } catch {
+        return [];
+      }
+    },
+    [startStr, endStr]
+  );
+
+  const transactions = useMemo(() => liveTransactions || [], [liveTransactions]);
 
   const { gridCells, monthData } = useMemo(() => {
     let dataForMonth = {};
@@ -351,7 +366,11 @@ export default function CalendarPage() {
               const dayNum = cell.dayNum;
               const dayData = monthData[dayNum];
               const isSelected = selectedDay === dayNum;
-              const isToday = year === 2026 && month === 8 && dayNum === 24;
+              const today = new Date();
+              const isToday =
+                year === today.getFullYear() &&
+                month === today.getMonth() &&
+                dayNum === today.getDate();
 
               return (
                 <div

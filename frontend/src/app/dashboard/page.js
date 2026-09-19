@@ -3,9 +3,11 @@
 import { useState, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { db } from "../../../lib/db";
+import { getVaultId } from "../../../lib/vault";
+import { useLiveQuery } from "dexie-react-hooks";
 import {
   PieChart,
-  TrendingUp,
   Utensils,
   ShoppingBag,
   Car,
@@ -18,14 +20,17 @@ import {
   Plane,
   User,
   Wallet,
-  ArrowRight,
   Sparkles,
   ArrowUpRight,
   ArrowDownRight,
   ShieldCheck,
-  Calendar,
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
   LayoutGrid,
-  X
+  X,
+  UploadCloud,
+  Scale
 } from "lucide-react";
 
 // The 12 Canonical Backend Categories
@@ -42,20 +47,6 @@ const CANONICAL_CATEGORIES = [
   "Travel",
   "Personal",
   "Other"
-];
-
-// Mock Transactions Data
-const INITIAL_TRANSACTIONS = [
-  { id: "1", type: "expense", category: "Food", amount: 4250, desc: "Swiggy & Restaurant Dining", date: "Sep 18" },
-  { id: "2", type: "expense", category: "Shopping", amount: 3100, desc: "Amazon Clothes & Tech", date: "Sep 16" },
-  { id: "3", type: "expense", category: "Transport", amount: 1850, desc: "Uber & Petrol Cab Fares", date: "Sep 15" },
-  { id: "4", type: "expense", category: "Entertainment", amount: 1200, desc: "Movies & Event Tickets", date: "Sep 14" },
-  { id: "5", type: "expense", category: "Bills", amount: 950, desc: "Electricity & Water Bill", date: "Sep 12" },
-  { id: "6", type: "expense", category: "Subscriptions", amount: 799, desc: "Netflix & Spotify Premium", date: "Sep 10" },
-  { id: "7", type: "expense", category: "Food", amount: 1200, desc: "Organic Grocery Store", date: "Sep 08" },
-  { id: "8", type: "expense", category: "Personal", amount: 650, desc: "Salon & Grooming", date: "Sep 05" },
-  { id: "9", type: "expense", category: "Healthcare", amount: 450, desc: "Pharmacy Medicine", date: "Sep 03" },
-  { id: "10", type: "income", category: "Salary", amount: 55000, desc: "Monthly Salary Credit", date: "Sep 01" }
 ];
 
 // Category Icon & Color Mapping
@@ -93,26 +84,93 @@ export default function DashboardPage() {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
 
+  // Month navigation state (defaults to current month)
+  const [viewDate, setViewDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+
+  const handlePrevMonth = () => {
+    setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const handleToday = () => {
+    const now = new Date();
+    setViewDate(new Date(now.getFullYear(), now.getMonth(), 1));
+  };
+
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+
+  const monthNameYear = viewDate.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric"
+  });
+
+  // Calculate start and end strings for the selected month
+  const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+  const endStr = `${year}-${String(month + 1).padStart(2, "0")}-31`;
+
+  // Fetch live active & reconciled transactions from Dexie scoped to user vault
+  const liveTransactions = useLiveQuery(
+    async () => {
+      try {
+        const vaultId = getVaultId();
+        const records = await db.transactions
+          .where("date")
+          .between(startStr, endStr, true, true)
+          .toArray();
+        return records.filter(
+          (tx) =>
+            (!tx.vaultId || tx.vaultId === vaultId) &&
+            (tx.status === "active" || tx.status === "reconciled")
+        );
+      } catch {
+        return [];
+      }
+    },
+    [startStr, endStr]
+  );
+
+  const transactions = useMemo(() => liveTransactions || [], [liveTransactions]);
+
+  // Expenses and Income totals
+  const totalExpenseSum = useMemo(() => {
+    return transactions
+      .filter((t) => t.type?.toLowerCase() === "expense")
+      .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+  }, [transactions]);
+
+  const totalIncomeSum = useMemo(() => {
+    return transactions
+      .filter((t) => t.type?.toLowerCase() === "income")
+      .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+  }, [transactions]);
+
+  const netSavings = totalIncomeSum - totalExpenseSum;
+
   // Spending Category Breakdown Logic
   const categoryBreakdown = useMemo(() => {
-    // 1. Filter expense transactions
-    const expenses = INITIAL_TRANSACTIONS.filter((t) => t.type === "expense");
+    const expenses = transactions.filter((t) => t.type?.toLowerCase() === "expense");
 
-    // 2. Group by category and calculate total
     const map = {};
     CANONICAL_CATEGORIES.forEach((cat) => {
       map[cat] = 0;
     });
 
     expenses.forEach((t) => {
-      if (map[t.category] !== undefined) {
-        map[t.category] += t.amount;
+      const cat = t.category || "Other";
+      if (map[cat] !== undefined) {
+        map[cat] += Number(t.amount || 0);
       } else {
-        map["Other"] += t.amount;
+        map["Other"] += Number(t.amount || 0);
       }
     });
 
-    // 3. Convert to array and filter non-zero items
     const list = Object.keys(map)
       .map((cat) => ({
         category: cat,
@@ -120,10 +178,7 @@ export default function DashboardPage() {
       }))
       .filter((item) => item.amount > 0);
 
-    // 4. Sort highest spending -> lowest spending
     list.sort((a, b) => b.amount - a.amount);
-
-    // 5. Max amount for relative progress calculation
     const maxAmount = list[0]?.amount || 1;
 
     return {
@@ -131,19 +186,36 @@ export default function DashboardPage() {
       top5: list.slice(0, 5),
       maxAmount
     };
-  }, []);
-
-  const totalExpenseSum = useMemo(() => {
-    return INITIAL_TRANSACTIONS.filter((t) => t.type === "expense").reduce((acc, t) => acc + t.amount, 0);
-  }, []);
+  }, [transactions]);
 
   const topCategory = categoryBreakdown.top5[0];
+
+  // Map category to its transactions for fast grid and modal lookup
+  const categoryTransactionsMap = useMemo(() => {
+    const map = {};
+    CANONICAL_CATEGORIES.forEach((c) => {
+      map[c] = [];
+    });
+
+    transactions
+      .filter((t) => t.type?.toLowerCase() === "expense")
+      .forEach((t) => {
+        const cat = t.category || "Other";
+        if (map[cat]) {
+          map[cat].push(t);
+        } else {
+          map["Other"].push(t);
+        }
+      });
+
+    return map;
+  }, [transactions]);
 
   // Filtered transactions for selected category modal
   const selectedCategoryTransactions = useMemo(() => {
     if (!selectedCategory) return [];
-    return INITIAL_TRANSACTIONS.filter((t) => t.category === selectedCategory);
-  }, [selectedCategory]);
+    return categoryTransactionsMap[selectedCategory] || [];
+  }, [selectedCategory, categoryTransactionsMap]);
 
   return (
     <div className="relative min-h-screen w-full bg-[#FAF9FF] text-[#5B3F91] flex flex-col font-sans overflow-x-hidden selection:bg-[#C9B9F2] selection:text-[#5B3F91]">
@@ -174,16 +246,50 @@ export default function DashboardPage() {
             <Link href="/dashboard" className="text-[#8064C8] transition-colors">
               Dashboard
             </Link>
+            <Link href="/calendar" className="hover:text-[#8064C8] transition-colors">
+              Calendar
+            </Link>
             <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
               Upload
             </Link>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full border border-[#EAE3FA] shadow-xs">
-              <Calendar className="w-4 h-4 text-[#8064C8]" />
-              <span className="text-xs sm:text-sm font-bold text-[#5B3F91]">September 2026</span>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Month Navigation in Navbar */}
+            <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-2xl border border-[#EAE3FA] shadow-xs">
+              <button
+                type="button"
+                onClick={handlePrevMonth}
+                className="p-1 hover:bg-[#FAF9FF] text-[#5B3F91] rounded-lg transition-colors"
+                title="Previous Month"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-1 px-1">
+                <CalendarIcon className="w-3.5 h-3.5 text-[#8064C8]" />
+                <span className="text-xs sm:text-sm font-bold text-[#5B3F91] whitespace-nowrap">
+                  {monthNameYear}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                className="p-1 hover:bg-[#FAF9FF] text-[#5B3F91] rounded-lg transition-colors"
+                title="Next Month"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
+
+            <button
+              type="button"
+              onClick={handleToday}
+              className="px-3 py-1.5 bg-[#EAE3FA] hover:bg-[#C9B9F2] text-[#8064C8] text-xs font-bold rounded-full transition-colors hidden sm:block"
+            >
+              This Month
+            </button>
           </div>
         </div>
       </nav>
@@ -208,40 +314,67 @@ export default function DashboardPage() {
               />
             </div>
             <p className="text-sm sm:text-base text-[#5B3F91]/80 font-medium">
-              Track your spending breakdown, habits, and financial health.
+              Live spending breakdown, habits, and financial health for {monthNameYear}.
             </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Link
+              href="/calendar"
+              className="flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-[#FAF9FF] text-[#8064C8] text-xs sm:text-sm font-bold rounded-full border border-[#EAE3FA] shadow-xs transition-all hover:scale-105"
+            >
+              <CalendarIcon className="w-4 h-4" />
+              <span>Day-by-Day Calendar</span>
+            </Link>
+
+            <Link
+              href="/upload"
+              className="flex items-center gap-1.5 px-4 py-2 bg-[#8064C8] hover:bg-[#6F53B7] text-white text-xs sm:text-sm font-bold rounded-full shadow-md shadow-[#8064C8]/25 transition-all hover:scale-105"
+            >
+              <UploadCloud className="w-4 h-4" />
+              <span>Upload Statement</span>
+            </Link>
           </div>
         </div>
 
         {/* METRICS SUMMARY ROW */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Total Spent */}
           <div className="p-5 bg-white/90 backdrop-blur-sm rounded-3xl border border-[#EAE3FA] shadow-sm flex items-center gap-4">
             <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center shrink-0">
               <ArrowUpRight className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-bold text-[#5B3F91]/70">Total Spent</p>
-              <h3 className="text-2xl font-extrabold text-[#5B3F91]">₹{totalExpenseSum.toLocaleString("en-IN")}</h3>
+              <p className="text-xs font-bold text-[#5B3F91]/70">Total Spent ({monthNameYear})</p>
+              <h3 className="text-2xl font-extrabold text-[#5B3F91]">
+                ₹{totalExpenseSum.toLocaleString("en-IN")}
+              </h3>
             </div>
           </div>
 
-          <div className="p-5 bg-white/90 backdrop-blur-sm rounded-3xl border border-[#EAE3FA] shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-100 text-[#8064C8] rounded-2xl flex items-center justify-center shrink-0">
-              <PieChart className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-[#5B3F91]/70">Monthly Budget</p>
-              <h3 className="text-2xl font-extrabold text-[#5B3F91]">₹20,000</h3>
-            </div>
-          </div>
-
+          {/* Income This Month */}
           <div className="p-5 bg-white/90 backdrop-blur-sm rounded-3xl border border-[#EAE3FA] shadow-sm flex items-center gap-4">
             <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0">
               <ArrowDownRight className="w-6 h-6" />
             </div>
             <div>
               <p className="text-xs font-bold text-[#5B3F91]/70">Income This Month</p>
-              <h3 className="text-2xl font-extrabold text-emerald-600">₹55,000</h3>
+              <h3 className="text-2xl font-extrabold text-emerald-600">
+                ₹{totalIncomeSum.toLocaleString("en-IN")}
+              </h3>
+            </div>
+          </div>
+
+          {/* Net Savings / Balance */}
+          <div className="p-5 bg-white/90 backdrop-blur-sm rounded-3xl border border-[#EAE3FA] shadow-sm flex items-center gap-4">
+            <div className={`w-12 h-12 ${netSavings >= 0 ? "bg-purple-100 text-[#8064C8]" : "bg-amber-100 text-amber-600"} rounded-2xl flex items-center justify-center shrink-0`}>
+              <Scale className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-[#5B3F91]/70">Net Savings</p>
+              <h3 className={`text-2xl font-extrabold ${netSavings >= 0 ? "text-[#5B3F91]" : "text-amber-700"}`}>
+                {netSavings < 0 ? "-" : ""}₹{Math.abs(netSavings).toLocaleString("en-IN")}
+              </h3>
             </div>
           </div>
         </div>
@@ -268,67 +401,92 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShowAllCategories(!showAllCategories)}
-                className="px-3.5 py-1.5 bg-[#FAF9FF] hover:bg-[#EAE3FA] text-[#8064C8] text-xs font-bold rounded-full border border-[#C9B9F2] transition-colors shrink-0"
-              >
-                {showAllCategories ? "Show Top 5" : "View All"}
-              </button>
+              {categoryBreakdown.all.length > 5 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllCategories(!showAllCategories)}
+                  className="px-3.5 py-1.5 bg-[#FAF9FF] hover:bg-[#EAE3FA] text-[#8064C8] text-xs font-bold rounded-full border border-[#C9B9F2] transition-colors shrink-0"
+                >
+                  {showAllCategories ? "Show Top 5" : "View All"}
+                </button>
+              )}
             </div>
 
             {/* Ranked Category List */}
-            <div className="space-y-5">
-              {(showAllCategories ? categoryBreakdown.all : categoryBreakdown.top5).map((item, index) => {
-                const meta = getCategoryMeta(item.category);
-                const IconComponent = meta.icon;
-
-                // Relative bar percentage based on #1 highest category
-                const relativeWidthPct = Math.round((item.amount / categoryBreakdown.maxAmount) * 100);
-
-                return (
-                  <div
-                    key={item.category}
-                    onClick={() => setSelectedCategory(item.category)}
-                    className="flex flex-col gap-1.5 group cursor-pointer p-2 rounded-2xl hover:bg-[#FAF9FF] transition-all"
+            {categoryBreakdown.all.length === 0 ? (
+              <div className="p-8 text-center bg-[#FAF9FF] rounded-2xl border border-dashed border-[#EAE3FA] flex flex-col items-center gap-3">
+                <div className="w-12 h-12 bg-[#EAE3FA] rounded-2xl flex items-center justify-center text-[#8064C8]">
+                  <PieChart className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-[#5B3F91] mb-1">
+                    No expenses recorded for {monthNameYear}
+                  </h4>
+                  <p className="text-xs text-[#5B3F91]/70 font-medium max-w-sm mb-4">
+                    Upload your bank statement or add transactions to see your personalized spending breakdown.
+                  </p>
+                  <Link
+                    href="/upload"
+                    className="inline-flex items-center gap-2 px-5 py-2 bg-[#8064C8] hover:bg-[#6F53B7] text-white text-xs font-bold rounded-full transition-all hover:scale-105"
                   >
-                    {/* Top Info Row */}
-                    <div className="flex items-center justify-between text-xs sm:text-sm">
-                      <div className="flex items-center gap-3">
-                        {/* Rank Badge */}
-                        <span className="w-6 text-center font-extrabold text-xs text-[#8064C8]">
-                          {index + 1}
-                        </span>
+                    <UploadCloud className="w-4 h-4" />
+                    <span>Upload Bank Statement</span>
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {(showAllCategories ? categoryBreakdown.all : categoryBreakdown.top5).map((item, index) => {
+                  const meta = getCategoryMeta(item.category);
+                  const IconComponent = meta.icon;
 
-                        {/* Category Icon & Title */}
-                        <div className={`p-2 rounded-xl border ${meta.bg} ${meta.border} ${meta.text}`}>
-                          <IconComponent className="w-4 h-4" />
+                  // Relative bar percentage based on #1 highest category
+                  const relativeWidthPct = Math.round((item.amount / categoryBreakdown.maxAmount) * 100);
+
+                  return (
+                    <div
+                      key={item.category}
+                      onClick={() => setSelectedCategory(item.category)}
+                      className="flex flex-col gap-1.5 group cursor-pointer p-2 rounded-2xl hover:bg-[#FAF9FF] transition-all"
+                    >
+                      {/* Top Info Row */}
+                      <div className="flex items-center justify-between text-xs sm:text-sm">
+                        <div className="flex items-center gap-3">
+                          {/* Rank Badge */}
+                          <span className="w-6 text-center font-extrabold text-xs text-[#8064C8]">
+                            {index + 1}
+                          </span>
+
+                          {/* Category Icon & Title */}
+                          <div className={`p-2 rounded-xl border ${meta.bg} ${meta.border} ${meta.text}`}>
+                            <IconComponent className="w-4 h-4" />
+                          </div>
+
+                          <span className="font-bold text-[#5B3F91] group-hover:text-[#8064C8] transition-colors">
+                            {item.category}
+                          </span>
                         </div>
 
-                        <span className="font-bold text-[#5B3F91] group-hover:text-[#8064C8] transition-colors">
-                          {item.category}
+                        {/* Amount */}
+                        <span className="font-extrabold text-[#5B3F91]">
+                          ₹{item.amount.toLocaleString("en-IN")}
                         </span>
                       </div>
 
-                      {/* Amount */}
-                      <span className="font-extrabold text-[#5B3F91]">
-                        ₹{item.amount.toLocaleString("en-IN")}
-                      </span>
-                    </div>
-
-                    {/* Relative Progress Bar Track */}
-                    <div className="pl-9 w-full">
-                      <div className="w-full h-3 bg-[#FAF9FF] rounded-full overflow-hidden border border-[#EAE3FA] p-0.5">
-                        <div
-                          className="h-full bg-[#8064C8] rounded-full transition-all duration-500 group-hover:bg-[#6F53B7]"
-                          style={{ width: `${relativeWidthPct}%` }}
-                        />
+                      {/* Relative Progress Bar Track */}
+                      <div className="pl-9 w-full">
+                        <div className="w-full h-3 bg-[#FAF9FF] rounded-full overflow-hidden border border-[#EAE3FA] p-0.5">
+                          <div
+                            className="h-full bg-[#8064C8] rounded-full transition-all duration-500 group-hover:bg-[#6F53B7]"
+                            style={{ width: `${relativeWidthPct}%` }}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
 
           </div>
 
@@ -355,12 +513,12 @@ export default function DashboardPage() {
                   <span>Penny&apos;s Spending Insight</span>
                 </div>
                 <p className="text-xs sm:text-sm text-[#5B3F91] font-semibold leading-relaxed">
-                  {topCategory ? (
+                  {topCategory && totalExpenseSum > 0 ? (
                     <span>
-                      &quot;You spent the most on <strong className="text-[#8064C8]">{topCategory.category}</strong> (₹{topCategory.amount.toLocaleString("en-IN")}) this month! That&apos;s {Math.round((topCategory.amount / totalExpenseSum) * 100)}% of your total expenses.&quot;
+                      &quot;You spent the most on <strong className="text-[#8064C8]">{topCategory.category}</strong> (₹{topCategory.amount.toLocaleString("en-IN")}) this month! That&apos;s {Math.round((topCategory.amount / totalExpenseSum) * 100)}% of your total spending.&quot;
                     </span>
                   ) : (
-                    <span>No expenses recorded yet! Add expenses to get insights.</span>
+                    <span>No expenses recorded yet for {monthNameYear}! Upload your bank statement to see smart automated insights.</span>
                   )}
                 </p>
               </div>
@@ -370,7 +528,7 @@ export default function DashboardPage() {
             <div className="p-4 bg-white/70 rounded-2xl border border-[#EAE3FA] flex items-center gap-3">
               <ShieldCheck className="w-5 h-5 text-[#8064C8] shrink-0" />
               <p className="text-xs font-medium text-[#5B3F91]/80">
-                Your financial data stays local on your device.
+                Your financial data stays local on your device inside your encrypted vault.
               </p>
             </div>
 
@@ -392,7 +550,7 @@ export default function DashboardPage() {
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-[#5B3F91]/70 font-medium">
-              Click any category card below to see all transactions under that category
+              Click any category card below to see all transactions under that category for {monthNameYear}
             </p>
           </div>
 
@@ -401,8 +559,8 @@ export default function DashboardPage() {
             {CANONICAL_CATEGORIES.map((cat) => {
               const meta = getCategoryMeta(cat);
               const IconComp = meta.icon;
-              const catTxs = INITIAL_TRANSACTIONS.filter((t) => t.category === cat && t.type === "expense");
-              const catSum = catTxs.reduce((acc, t) => acc + t.amount, 0);
+              const catTxs = categoryTransactionsMap[cat] || [];
+              const catSum = catTxs.reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
               return (
                 <div
@@ -459,7 +617,7 @@ export default function DashboardPage() {
                     {selectedCategory} Expenses
                   </h3>
                   <p className="text-xs text-[#5B3F91]/70 font-semibold">
-                    Showing all transactions under {selectedCategory}
+                    Showing all transactions under {selectedCategory} for {monthNameYear}
                   </p>
                 </div>
               </div>
@@ -477,7 +635,7 @@ export default function DashboardPage() {
             <div className="max-h-80 overflow-y-auto space-y-3 pr-1 mb-4">
               {selectedCategoryTransactions.length === 0 ? (
                 <div className="p-8 text-center text-[#5B3F91]/60 font-semibold text-sm bg-[#FAF9FF] rounded-2xl border border-[#EAE3FA]">
-                  No transactions recorded under <strong className="text-[#8064C8]">{selectedCategory}</strong> yet.
+                  No transactions recorded under <strong className="text-[#8064C8]">{selectedCategory}</strong> for {monthNameYear}.
                 </div>
               ) : (
                 selectedCategoryTransactions.map((tx) => (
@@ -486,11 +644,13 @@ export default function DashboardPage() {
                     className="p-3.5 bg-[#FAF9FF] rounded-2xl border border-[#EAE3FA] flex items-center justify-between gap-3 hover:border-[#C9B9F2] transition-colors"
                   >
                     <div>
-                      <p className="text-xs sm:text-sm font-bold text-[#5B3F91]">{tx.desc}</p>
+                      <p className="text-xs sm:text-sm font-bold text-[#5B3F91]">
+                        {tx.merchant || tx.desc || "Expense"}
+                      </p>
                       <p className="text-[11px] text-[#5B3F91]/70 font-semibold">{tx.date}</p>
                     </div>
                     <span className="text-xs sm:text-sm font-extrabold text-[#5B3F91]">
-                      - ₹{tx.amount.toLocaleString("en-IN")}
+                      - ₹{Number(tx.amount || 0).toLocaleString("en-IN")}
                     </span>
                   </div>
                 ))
@@ -500,7 +660,7 @@ export default function DashboardPage() {
             {/* Modal Footer */}
             <div className="flex items-center justify-between pt-3 border-t border-[#EAE3FA]">
               <span className="text-xs font-bold text-[#8064C8]">
-                Total Spent: ₹{selectedCategoryTransactions.reduce((acc, t) => acc + t.amount, 0).toLocaleString("en-IN")}
+                Total Spent: ₹{selectedCategoryTransactions.reduce((acc, t) => acc + Number(t.amount || 0), 0).toLocaleString("en-IN")}
               </span>
               <button
                 type="button"
@@ -534,6 +694,7 @@ export default function DashboardPage() {
           <div className="flex gap-6 text-xs font-semibold text-[#5B3F91]">
             <Link href="/" className="hover:text-[#8064C8]">Home</Link>
             <Link href="/dashboard" className="hover:text-[#8064C8]">Dashboard</Link>
+            <Link href="/calendar" className="hover:text-[#8064C8]">Calendar</Link>
             <Link href="/upload" className="hover:text-[#8064C8]">Upload</Link>
           </div>
         </div>

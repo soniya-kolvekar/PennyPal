@@ -7,10 +7,18 @@ import { getCurrentUser } from "./auth";
  */
 export function getVaultId() {
   const user = getCurrentUser();
-  if (!user || !user.uid) {
-    throw new Error("Authentication required: No active user vault found.");
+  if (user && user.uid) {
+    return user.uid;
   }
-  return user.uid;
+  if (typeof window !== "undefined") {
+    let guestId = localStorage.getItem("pennypal_guest_vault");
+    if (!guestId) {
+      guestId = "guest_vault";
+      localStorage.setItem("pennypal_guest_vault", guestId);
+    }
+    return guestId;
+  }
+  return "guest_vault";
 }
 
 /**
