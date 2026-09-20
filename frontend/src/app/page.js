@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import AppNavbar from "../components/AppNavbar";
+import { isAuthenticated } from "../../lib/auth";
 import {
   ArrowRight,
   Sparkles,
@@ -40,6 +42,21 @@ import {
 export default function LandingPage() {
   const [selectedDay, setSelectedDay] = useState(11);
   const [chatMessage, setChatMessage] = useState("");
+  const [isAuth, setIsAuth] = useState(false);
+
+  useEffect(() => {
+    const checkAuth = () => {
+      setIsAuth(isAuthenticated());
+    };
+    checkAuth();
+
+    window.addEventListener("auth-changed", checkAuth);
+    window.addEventListener("storage", checkAuth);
+    return () => {
+      window.removeEventListener("auth-changed", checkAuth);
+      window.removeEventListener("storage", checkAuth);
+    };
+  }, []);
 
   return (
     <div className="relative min-h-screen w-full bg-[#FAF9FF] text-[#5B3F91] flex flex-col font-sans overflow-x-hidden selection:bg-[#C9B9F2] selection:text-[#5B3F91]">
@@ -58,51 +75,55 @@ export default function LandingPage() {
       <div className="absolute bottom-0 left-1/4 w-[650px] h-[650px] bg-[#C9B9F2] rounded-full blur-3xl opacity-40 pointer-events-none" />
 
       {/* 1. NAVBAR */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md bg-[#FAF9FF]/90 border-b border-[#EAE3FA]/80 px-6 sm:px-12 py-1.5 sm:py-2 transition-all">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/logoo.png"
-              alt="PennyPal Logo"
-              width={160}
-              height={50}
-              style={{ width: "auto", height: "auto" }}
-              className="h-9 sm:h-10 object-contain"
-              priority
-            />
-          </Link>
-
-          {/* Navigation Links (Public Landing Only) */}
-          <div className="hidden md:flex items-center gap-8 text-base sm:text-lg font-bold text-[#5B3F91]">
-            <a href="#features" className="hover:text-[#8064C8] transition-colors">
-              Features
-            </a>
-            <a href="#how-it-works" className="hover:text-[#8064C8] transition-colors">
-              How It Works
-            </a>
-            <a href="#why-pennypal" className="hover:text-[#8064C8] transition-colors">
-              Why PennyPal?
-            </a>
-          </div>
-
-          {/* Auth Action Buttons */}
-          <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="px-4 py-2 text-base font-bold text-[#5B3F91] hover:text-[#8064C8] transition-colors"
-            >
-              Sign In
+      {isAuth ? (
+        <AppNavbar />
+      ) : (
+        <nav className="sticky top-0 z-50 backdrop-blur-md bg-[#FAF9FF]/90 border-b border-[#EAE3FA]/80 px-6 sm:px-12 py-1.5 sm:py-2 transition-all">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            {/* Logo */}
+            <Link href="/" className="flex items-center gap-2">
+              <Image
+                src="/logoo.png"
+                alt="PennyPal Logo"
+                width={160}
+                height={50}
+                style={{ width: "auto", height: "auto" }}
+                className="h-9 sm:h-10 object-contain"
+                priority
+              />
             </Link>
-            <Link
-              href="/signup"
-              className="px-5 py-2 bg-[#8064C8] hover:bg-[#6F53B7] text-white text-base font-bold rounded-full shadow-md shadow-[#8064C8]/25 transition-all hover:scale-[1.02]"
-            >
-              Get Started
-            </Link>
+
+            {/* Navigation Links (Public Landing Only) */}
+            <div className="hidden md:flex items-center gap-8 text-base sm:text-lg font-bold text-[#5B3F91]">
+              <a href="#features" className="hover:text-[#8064C8] transition-colors">
+                Features
+              </a>
+              <a href="#how-it-works" className="hover:text-[#8064C8] transition-colors">
+                How It Works
+              </a>
+              <a href="#why-pennypal" className="hover:text-[#8064C8] transition-colors">
+                Why PennyPal?
+              </a>
+            </div>
+
+            {/* Auth Action Buttons */}
+            <div className="flex items-center gap-3">
+              <Link
+                href="/login"
+                className="px-4 py-2 text-base font-bold text-[#5B3F91] hover:text-[#8064C8] transition-colors"
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/signup"
+                className="px-5 py-2 bg-[#8064C8] hover:bg-[#6F53B7] text-white text-base font-bold rounded-full shadow-md shadow-[#8064C8]/25 transition-all hover:scale-[1.02]"
+              >
+                Get Started
+              </Link>
+            </div>
           </div>
-        </div>
-      </nav>
+        </nav>
+      )}
 
       {/* 2. HERO SECTION */}
       <section className="relative z-10 pt-10 sm:pt-16 pb-16 sm:pb-24 px-6 sm:px-12 max-w-7xl mx-auto w-full">
@@ -139,10 +160,10 @@ export default function LandingPage() {
             {/* Hero Buttons */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
               <Link
-                href="/signup"
+                href={isAuth ? "/dashboard" : "/signup"}
                 className="px-8 py-4 bg-[#8064C8] hover:bg-[#6F53B7] text-white font-bold rounded-full shadow-lg shadow-[#8064C8]/30 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] text-base"
               >
-                <span>Start My Journey</span>
+                <span>{isAuth ? "Go to Dashboard" : "Start My Journey"}</span>
                 <ArrowRight className="w-5 h-5" />
               </Link>
               <a
@@ -993,10 +1014,10 @@ export default function LandingPage() {
           </p>
 
           <Link
-            href="/signup"
+            href={isAuth ? "/dashboard" : "/signup"}
             className="px-10 py-5 bg-[#8064C8] hover:bg-[#6F53B7] text-white font-bold rounded-full shadow-xl shadow-[#8064C8]/30 flex items-center gap-3 transition-all hover:scale-105 text-lg"
           >
-            <span>Start My Journey</span>
+            <span>{isAuth ? "Go to Dashboard" : "Start My Journey"}</span>
             <ArrowRight className="w-6 h-6" />
           </Link>
         </div>
@@ -1027,8 +1048,14 @@ export default function LandingPage() {
             />
           </p>
           <div className="flex gap-6 text-xs font-semibold text-[#5B3F91]">
-            <Link href="/signup" className="hover:text-[#8064C8]">Sign Up</Link>
-            <Link href="/login" className="hover:text-[#8064C8]">Sign In</Link>
+            {isAuth ? (
+              <Link href="/dashboard" className="hover:text-[#8064C8]">Dashboard</Link>
+            ) : (
+              <>
+                <Link href="/signup" className="hover:text-[#8064C8]">Sign Up</Link>
+                <Link href="/login" className="hover:text-[#8064C8]">Sign In</Link>
+              </>
+            )}
           </div>
         </div>
       </footer>

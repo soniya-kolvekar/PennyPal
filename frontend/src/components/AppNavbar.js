@@ -13,6 +13,7 @@ export default function AppNavbar() {
   const handleLogout = () => {
     logout();
     router.push("/");
+    router.refresh();
   };
 
   const navItems = [

@@ -57,6 +57,7 @@ export async function signup(email, password) {
     if (typeof window !== "undefined") {
       localStorage.setItem(TOKEN_KEY, data.token);
       localStorage.setItem(USER_KEY, JSON.stringify(sessionUser));
+      window.dispatchEvent(new Event("auth-changed"));
     }
 
     return {
@@ -102,6 +103,7 @@ export async function signin(email, password) {
     if (typeof window !== "undefined") {
       localStorage.setItem(TOKEN_KEY, data.token);
       localStorage.setItem(USER_KEY, JSON.stringify(sessionUser));
+      window.dispatchEvent(new Event("auth-changed"));
     }
 
     return {
@@ -124,6 +126,7 @@ export function logout() {
   if (typeof window !== "undefined") {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    window.dispatchEvent(new Event("auth-changed"));
   }
 }
 
