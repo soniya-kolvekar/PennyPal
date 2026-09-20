@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import AppNavbar from "../../components/AppNavbar";
 import { db } from "../../../lib/db";
 import { getVaultId } from "../../../lib/vault";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -149,48 +150,7 @@ export default function GoalsPage() {
       )}
 
       {/* NAVBAR */}
-      <nav className="sticky top-0 z-40 backdrop-blur-md bg-[#FAF9FF]/90 border-b border-[#EAE3FA]/80 px-6 sm:px-12 py-2 transition-all">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/logoo.png"
-              alt="PennyPal Logo"
-              width={160}
-              height={50}
-              style={{ width: "auto", height: "auto" }}
-              className="h-9 sm:h-10 object-contain"
-              priority
-            />
-          </Link>
-
-          <div className="hidden md:flex items-center gap-8 text-base font-bold text-[#5B3F91]">
-            <Link href="/" className="hover:text-[#8064C8] transition-colors">
-              Home
-            </Link>
-            <Link href="/dashboard" className="hover:text-[#8064C8] transition-colors">
-              Dashboard
-            </Link>
-            <Link href="/calendar" className="hover:text-[#8064C8] transition-colors">
-              Calendar
-            </Link>
-            <Link href="/goals" className="text-[#8064C8] transition-colors font-extrabold">
-              Goals
-            </Link>
-            <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
-              Upload
-            </Link>
-            <Link href="/settings" className="hover:text-[#8064C8] transition-colors">
-              Settings
-            </Link>
-            <Link href="/chat" className="hover:text-[#8064C8] transition-colors">
-              Chat
-            </Link>
-          </div>
-
-          {/* Right spacer to keep nav items centered in the middle */}
-          <div className="hidden md:block w-40" />
-        </div>
-      </nav>
+      <AppNavbar />
 
       {/* MAIN CONTAINER */}
       <main className="relative z-10 max-w-6xl w-full mx-auto px-6 sm:px-12 py-8 flex flex-col gap-8 flex-1">

@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import AppNavbar from "../../components/AppNavbar";
 import { db } from "../../../lib/db";
 import { getVaultId } from "../../../lib/vault";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -239,55 +240,7 @@ export default function CalendarPage() {
       <div className="absolute bottom-10 left-10 w-[450px] h-[450px] bg-[#F6C9D5] rounded-full blur-3xl opacity-30 pointer-events-none" />
 
       {/* NAVBAR */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md bg-[#FAF9FF]/90 border-b border-[#EAE3FA]/80 px-6 sm:px-12 py-2 transition-all">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/logoo.png"
-              alt="PennyPal Logo"
-              width={160}
-              height={50}
-              style={{ width: "auto", height: "auto" }}
-              className="h-9 sm:h-10 object-contain"
-              priority
-            />
-          </Link>
-
-          <div className="hidden md:flex items-center gap-8 text-base font-bold text-[#5B3F91]">
-            <Link href="/" className="hover:text-[#8064C8] transition-colors">
-              Home
-            </Link>
-            <Link href="/dashboard" className="hover:text-[#8064C8] transition-colors">
-              Dashboard
-            </Link>
-            <Link href="/calendar" className="text-[#8064C8] transition-colors">
-              Calendar
-            </Link>
-            <Link href="/goals" className="hover:text-[#8064C8] transition-colors">
-              Goals
-            </Link>
-            <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
-              Upload
-            </Link>
-            <Link href="/settings" className="hover:text-[#8064C8] transition-colors">
-              Settings
-            </Link>
-            <Link href="/chat" className="hover:text-[#8064C8] transition-colors">
-              Chat
-            </Link>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleToday}
-              className="px-4 py-1.5 bg-[#EAE3FA] hover:bg-[#C9B9F2] text-[#8064C8] text-xs font-bold rounded-full transition-colors"
-            >
-              Today
-            </button>
-          </div>
-        </div>
-      </nav>
+      <AppNavbar />
 
       {/* MAIN CONTAINER */}
       <main className="relative z-10 max-w-5xl w-full mx-auto px-6 sm:px-12 py-8 flex flex-col gap-8">

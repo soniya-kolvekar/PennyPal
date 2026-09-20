@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import AppNavbar from "../../components/AppNavbar";
 import { db } from "../../../lib/db";
 import { getVaultId } from "../../../lib/vault";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -225,46 +226,34 @@ export default function DashboardPage() {
       <div className="absolute top-2/3 left-0 w-[450px] h-[450px] bg-[#F6C9D5] rounded-full blur-3xl opacity-30 pointer-events-none -translate-x-1/3" />
 
       {/* NAVBAR */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md bg-[#FAF9FF]/90 border-b border-[#EAE3FA]/80 px-6 sm:px-12 py-2 transition-all">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/logoo.png"
-              alt="PennyPal Logo"
-              width={160}
-              height={50}
-              style={{ width: "auto", height: "auto" }}
-              className="h-9 sm:h-10 object-contain"
-              priority
-            />
-          </Link>
+      <AppNavbar />
 
-          <div className="hidden md:flex items-center gap-8 text-base font-bold text-[#5B3F91]">
-            <Link href="/" className="hover:text-[#8064C8] transition-colors">
-              Home
-            </Link>
-            <Link href="/dashboard" className="text-[#8064C8] transition-colors">
-              Dashboard
-            </Link>
-            <Link href="/calendar" className="hover:text-[#8064C8] transition-colors">
-              Calendar
-            </Link>
-            <Link href="/goals" className="hover:text-[#8064C8] transition-colors">
-              Goals
-            </Link>
-            <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
-              Upload
-            </Link>
-            <Link href="/settings" className="hover:text-[#8064C8] transition-colors">
-              Settings
-            </Link>
-            <Link href="/chat" className="hover:text-[#8064C8] transition-colors">
-              Chat
-            </Link>
+      {/* MAIN CONTENT */}
+      <main className="relative z-10 max-w-6xl w-full mx-auto px-6 sm:px-12 py-8 flex flex-col gap-8">
+        
+        {/* DASHBOARD HEADER */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="font-handwritten text-4xl sm:text-5xl font-bold text-[#5B3F91]">
+                My Money Dashboard
+              </h1>
+              <Image
+                src="/heart.png"
+                alt="Heart"
+                width={28}
+                height={28}
+                style={{ width: "auto", height: "auto" }}
+                className="h-7 w-auto object-contain"
+              />
+            </div>
+            <p className="text-sm sm:text-base text-[#5B3F91]/80 font-medium">
+              Live spending breakdown, habits, and financial health for {monthNameYear}.
+            </p>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Month Navigation in Navbar */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Month Navigation */}
             <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-2xl border border-[#EAE3FA] shadow-xs">
               <button
                 type="button"
@@ -299,35 +288,7 @@ export default function DashboardPage() {
             >
               This Month
             </button>
-          </div>
-        </div>
-      </nav>
 
-      {/* MAIN CONTENT */}
-      <main className="relative z-10 max-w-6xl w-full mx-auto px-6 sm:px-12 py-8 flex flex-col gap-8">
-        
-        {/* DASHBOARD HEADER */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h1 className="font-handwritten text-4xl sm:text-5xl font-bold text-[#5B3F91]">
-                My Money Dashboard
-              </h1>
-              <Image
-                src="/heart.png"
-                alt="Heart"
-                width={28}
-                height={28}
-                style={{ width: "auto", height: "auto" }}
-                className="h-7 w-auto object-contain"
-              />
-            </div>
-            <p className="text-sm sm:text-base text-[#5B3F91]/80 font-medium">
-              Live spending breakdown, habits, and financial health for {monthNameYear}.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
             <Link
               href="/calendar"
               className="flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-[#FAF9FF] text-[#8064C8] text-xs sm:text-sm font-bold rounded-full border border-[#EAE3FA] shadow-xs transition-all hover:scale-105"

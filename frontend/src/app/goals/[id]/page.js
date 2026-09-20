@@ -4,6 +4,7 @@ import { useState, useEffect, use } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import AppNavbar from "@/components/AppNavbar";
 import { db } from "../../../../lib/db";
 import { getVaultId } from "../../../../lib/vault";
 import { updateGoalProgress, deleteGoal, fetchGoalAdvice } from "../../../../lib/goals";
@@ -125,21 +126,7 @@ export default function GoalDetailPage({ params: paramsPromise }) {
   if (!goal) {
     return (
       <div className="min-h-screen bg-[#FAF9FF] text-[#5B3F91] flex flex-col font-sans">
-        <nav className="sticky top-0 z-40 backdrop-blur-md bg-[#FAF9FF]/90 border-b border-[#EAE3FA]/80 px-6 sm:px-12 py-2">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <Image
-                src="/logoo.png"
-                alt="PennyPal Logo"
-                width={160}
-                height={50}
-                style={{ width: "auto", height: "auto" }}
-                className="h-9 sm:h-10 object-contain"
-                priority
-              />
-            </Link>
-          </div>
-        </nav>
+        <AppNavbar />
 
         <main className="max-w-4xl w-full mx-auto px-6 py-16 text-center">
           <h2 className="text-2xl font-bold font-handwritten mb-4">Goal not found</h2>
@@ -177,53 +164,7 @@ export default function GoalDetailPage({ params: paramsPromise }) {
       )}
 
       {/* NAVBAR */}
-      <nav className="sticky top-0 z-40 backdrop-blur-md bg-[#FAF9FF]/90 border-b border-[#EAE3FA]/80 px-6 sm:px-12 py-2 transition-all">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/logoo.png"
-              alt="PennyPal Logo"
-              width={160}
-              height={50}
-              style={{ width: "auto", height: "auto" }}
-              className="h-9 sm:h-10 object-contain"
-              priority
-            />
-          </Link>
-
-          <div className="hidden md:flex items-center gap-8 text-base font-bold text-[#5B3F91]">
-            <Link href="/" className="hover:text-[#8064C8] transition-colors">
-              Home
-            </Link>
-            <Link href="/dashboard" className="hover:text-[#8064C8] transition-colors">
-              Dashboard
-            </Link>
-            <Link href="/calendar" className="hover:text-[#8064C8] transition-colors">
-              Calendar
-            </Link>
-            <Link href="/goals" className="text-[#8064C8] transition-colors font-extrabold">
-              Goals
-            </Link>
-            <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
-              Upload
-            </Link>
-            <Link href="/settings" className="hover:text-[#8064C8] transition-colors">
-              Settings
-            </Link>
-            <Link href="/chat" className="hover:text-[#8064C8] transition-colors">
-              Chat
-            </Link>
-          </div>
-
-          <Link
-            href="/goals"
-            className="px-4 py-2 bg-white border border-[#EAE3FA] text-[#5B3F91] hover:bg-[#FAF9FF] text-xs sm:text-sm font-bold rounded-xl transition-all shadow-xs flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Goals</span>
-          </Link>
-        </div>
-      </nav>
+      <AppNavbar />
 
       {/* MAIN CONTAINER */}
       <main className="relative z-10 max-w-5xl w-full mx-auto px-6 sm:px-12 py-8 flex flex-col gap-8 flex-1">
