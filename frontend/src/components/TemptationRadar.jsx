@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { db } from "../../lib/db";
+import { getVaultId } from "../../lib/vault";
 import { Flame, MapPin, Settings2, BellRing, X } from "lucide-react";
 
 const DEMO_ZONES = [
@@ -86,6 +87,9 @@ export default function TemptationRadar() {
   };
 
   const handleLocationUpdate = async (lat, lng, forceTrigger = false) => {
+    // Never fire alerts when radar is disabled
+    if (!enabled && !forceTrigger) return;
+
     for (const zone of DEMO_ZONES) {
       const dist = getDistance(lat, lng, zone.lat, zone.lng);
       if (dist <= zone.radius) {
@@ -106,14 +110,26 @@ export default function TemptationRadar() {
     const sixHours = 6 * 60 * 60 * 1000;
     if (now - lastAlertTime < sixHours) return; // Cooldown active
 
-    // 3. Analyze Dexie Transactions for this category
+    // 3. Analyze Dexie Transactions for this category (scoped to current vault)
+    const vaultId = typeof window !== "undefined" ? getVaultId() : "default_vault";
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
 
-    // Fetch active/reconciled expenses
-    const txs = await db.transactions
-      .filter(tx => (tx.status === "active" || tx.status === "reconciled") && tx.type === "expense")
+    // Fetch active expenses scoped to this user's vault
+    const activeExpenses = await db.transactions
+      .where("[vaultId+status]")
+      .equals([vaultId, "active"])
       .toArray();
+
+    // Also fetch reconciled expenses
+    const reconciledExpenses = await db.transactions
+      .where("[vaultId+status]")
+      .equals([vaultId, "reconciled"])
+      .toArray();
+
+    const txs = [...activeExpenses, ...reconciledExpenses].filter(
+      (tx) => tx.type === "expense"
+    );
 
     // Calculate category spend for current month
     let categorySpend = 0;
@@ -142,7 +158,7 @@ export default function TemptationRadar() {
         // Wait, the routes have authMiddleware. For a hackathon, we assume the user is logged in.
         // We'll pull token from localStorage if it exists, but the user didn't specify the exact auth key.
         // Let's just try without if there's an issue, or pass a dummy token.
-        const token = localStorage.getItem("token") || "";
+        const token = localStorage.getItem("pennypal_token") || "";
 
         const response = await fetch("http://localhost:3000/api/analyze/temptation", {
           method: "POST",
@@ -187,8 +203,13 @@ export default function TemptationRadar() {
     }
   };
 
-  // For testing without mocking GPS
+  // Simulate entering a spending zone (Developer Testing Tools)
   const testZone = (zone) => {
+    if (!enabled) {
+      showToast("Enable the Temptation Radar first to simulate zones.", "error");
+      return;
+    }
+
     // Clear cooldowns for testing
     const today = new Date().toDateString();
     localStorage.removeItem(`temptation_cooldown_${zone.category}`);
