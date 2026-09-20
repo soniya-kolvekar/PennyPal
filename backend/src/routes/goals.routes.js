@@ -4,7 +4,9 @@ const authMiddleware =
     require("../middleware/authMiddleware");
 
 const {
-    analyzeGoalController
+    analyzeGoalController,
+    generateGoalPlanController,
+    generateGoalAdviceController
 } = require("../controllers/goals.controller");
 
 const router = express.Router();
@@ -14,6 +16,18 @@ router.post(
     "/analyze",
     authMiddleware,
     analyzeGoalController
+);
+
+router.post(
+    "/plan",
+    authMiddleware,
+    generateGoalPlanController
+);
+
+router.post(
+    "/advice",
+    authMiddleware,
+    generateGoalAdviceController
 );
 
 
