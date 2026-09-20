@@ -29,6 +29,19 @@ export default function BossHistoryPage() {
     [vaultId]
   );
 
+  const transactions = useLiveQuery(
+    async () => {
+      try {
+        if (!db || !db.transactions) return [];
+        const items = await db.transactions.toArray();
+        return items.filter((t) => !t.vaultId || t.vaultId === vaultId);
+      } catch {
+        return [];
+      }
+    },
+    [vaultId]
+  );
+
   if (rawBosses === undefined) {
     return <PennyLoader message="Loading boss history..." />;
   }
@@ -125,7 +138,7 @@ export default function BossHistoryPage() {
         {filteredBosses.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredBosses.map((boss) => (
-              <BossCard key={boss.id} boss={boss} />
+              <BossCard key={boss.id} boss={boss} transactions={transactions || []} />
             ))}
           </div>
         ) : (

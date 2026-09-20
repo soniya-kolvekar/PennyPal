@@ -210,7 +210,7 @@ export default function CategoryDetailPage({ params: paramsPromise }) {
               <Swords className="w-5 h-5 text-[#5B3F91]" />
               <h2 className="text-xl font-extrabold text-gray-900 font-handwritten">ACTIVE BATTLE</h2>
             </div>
-            <BossCard boss={existingBoss} />
+            <BossCard boss={existingBoss} transactions={transactions || []} />
           </div>
         ) : (
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#EAE3FA] shadow-sm text-center flex flex-col items-center justify-center space-y-4">

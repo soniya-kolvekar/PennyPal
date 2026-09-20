@@ -31,8 +31,12 @@ import {
   LayoutGrid,
   X,
   UploadCloud,
-  Scale
+  Scale,
+  Swords,
+  Trophy,
+  ArrowRight
 } from "lucide-react";
+import { computeBossSpent } from "../../../lib/boss";
 
 // The 12 Canonical Backend Categories
 const CANONICAL_CATEGORIES = [
@@ -153,6 +157,27 @@ export default function DashboardPage() {
   }, [transactions]);
 
   const netSavings = totalIncomeSum - totalExpenseSum;
+
+  // Live query active boss for user vault
+  const activeBoss = useLiveQuery(
+    async () => {
+      try {
+        const vaultId = getVaultId();
+        if (!db || !db.bosses) return null;
+        const allBosses = await db.bosses.toArray();
+        const userBosses = allBosses.filter((b) => !b.vaultId || b.vaultId === vaultId);
+        return userBosses.find((b) => b.status === "active") || userBosses[0] || null;
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
+
+  const bossSpent = useMemo(() => {
+    if (!activeBoss) return 0;
+    return computeBossSpent(activeBoss, transactions);
+  }, [activeBoss, transactions]);
 
   // Spending Category Breakdown Logic
   const categoryBreakdown = useMemo(() => {
@@ -502,6 +527,91 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {/* Active Boss Battle Card */}
+            {activeBoss ? (
+              <div className="p-6 bg-gradient-to-br from-white via-[#FAF9FF] to-[#F6EEFA] rounded-3xl border border-[#EAE3FA] shadow-md flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-2xl bg-[#FAF9FF] border border-[#EAE3FA] flex items-center justify-center p-1 overflow-hidden shrink-0">
+                      <Image
+                        src="/villain.png"
+                        alt={activeBoss.name || "CASHpaw"}
+                        width={36}
+                        height={36}
+                        className="object-contain"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-[#8064C8] block">
+                        ACTIVE BOSS BATTLE
+                      </span>
+                      <h4 className="text-sm font-extrabold text-gray-900 leading-tight">
+                        {activeBoss.name || "CASHpaw Challenge"}
+                      </h4>
+                    </div>
+                  </div>
+
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                    activeBoss.status === "victory"
+                      ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                      : bossSpent > Number(activeBoss.targetLimit)
+                      ? "bg-rose-100 text-rose-800 border-rose-300"
+                      : "bg-[#EAE3FA] text-[#5B3F91] border-[#C9B9F2]"
+                  }`}>
+                    {activeBoss.status === "victory" ? "DEFEATED" : bossSpent > Number(activeBoss.targetLimit) ? "OVER LIMIT" : "IN PROGRESS"}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-bold">
+                    <span className="text-gray-900">₹{bossSpent.toLocaleString()} spent</span>
+                    <span className="text-gray-500">/ ₹{Number(activeBoss.targetLimit || 1).toLocaleString()}</span>
+                  </div>
+                  <div className="w-full bg-white rounded-full h-2.5 border border-[#EAE3FA] overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        activeBoss.status === "victory"
+                          ? "bg-emerald-500"
+                          : bossSpent > Number(activeBoss.targetLimit)
+                          ? "bg-rose-500"
+                          : "bg-[#5B3F91]"
+                      }`}
+                      style={{
+                        width: `${Math.min(100, Math.round((bossSpent / Number(activeBoss.targetLimit || 1)) * 100))}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <Link
+                  href={`/boss/${activeBoss.id}`}
+                  className="w-full py-2.5 px-3 bg-[#5B3F91] hover:bg-[#4A3277] text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 hover:scale-[1.02]"
+                >
+                  <Swords className="w-3.5 h-3.5" />
+                  <span>Fight Boss Arena →</span>
+                </Link>
+              </div>
+            ) : (
+              <div className="p-5 bg-white/90 rounded-3xl border border-[#EAE3FA] shadow-xs flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#FAF9FF] border border-[#EAE3FA] flex items-center justify-center p-1 shrink-0">
+                    <Image src="/villain.png" alt="CASHpaw" width={32} height={32} className="object-contain" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-900">Fight CASHpaw</h4>
+                    <p className="text-[11px] text-gray-500">Set a spending target & defeat the boss</p>
+                  </div>
+                </div>
+                <Link
+                  href="/boss/create"
+                  className="px-3 py-1.5 bg-[#5B3F91] hover:bg-[#4A3277] text-white text-xs font-bold rounded-xl shrink-0 transition-colors flex items-center gap-1"
+                >
+                  <Swords className="w-3 h-3" />
+                  <span>Battle</span>
+                </Link>
+              </div>
+            )}
+
             {/* Quick Privacy Reminder */}
             <div className="p-4 bg-white/70 rounded-2xl border border-[#EAE3FA] flex items-center gap-3">
               <ShieldCheck className="w-5 h-5 text-[#8064C8] shrink-0" />
@@ -636,17 +746,26 @@ export default function DashboardPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-between pt-3 border-t border-[#EAE3FA]">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#EAE3FA]">
               <span className="text-xs font-bold text-[#8064C8]">
                 Total Spent: ₹{selectedCategoryTransactions.reduce((acc, t) => acc + Number(t.amount || 0), 0).toLocaleString("en-IN")}
               </span>
-              <button
-                type="button"
-                onClick={() => setSelectedCategory(null)}
-                className="px-5 py-2 bg-[#8064C8] hover:bg-[#6F53B7] text-white text-xs font-bold rounded-full shadow-md shadow-[#8064C8]/25 transition-all"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/categories/${encodeURIComponent(selectedCategory || "Shopping")}`}
+                  className="px-4 py-2 bg-[#FAF9FF] hover:bg-[#EAE3FA] border border-[#EAE3FA] text-[#5B3F91] text-xs font-bold rounded-full transition-colors flex items-center gap-1.5"
+                >
+                  <Swords className="w-3.5 h-3.5" />
+                  <span>Category Boss →</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory(null)}
+                  className="px-5 py-2 bg-[#8064C8] hover:bg-[#6F53B7] text-white text-xs font-bold rounded-full shadow-md shadow-[#8064C8]/25 transition-all"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
           </div>

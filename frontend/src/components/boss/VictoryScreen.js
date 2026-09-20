@@ -9,6 +9,7 @@ import AchievementPopup from "./AchievementPopup";
 
 export default function VictoryScreen({ boss }) {
   const [xp, setXp] = useState(1420);
+  const [level, setLevel] = useState(8);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [showAchievement, setShowAchievement] = useState(false);
 
@@ -17,25 +18,50 @@ export default function VictoryScreen({ boss }) {
   const saved = Math.max(0, target - spent);
 
   useEffect(() => {
-    // XP Animation effect
-    const timer1 = setTimeout(() => {
-      setXp(1670);
-    }, 600);
+    let isMounted = true;
+    async function processVictory() {
+      try {
+        const { getVaultId } = await import("../../../lib/vault");
+        const { getUserProgress, claimBossReward } = await import("../../../lib/boss");
+        const vaultId = getVaultId();
 
-    const timer2 = setTimeout(() => {
-      setShowLevelUp(true);
-    }, 1500);
+        // 1. Fetch initial progress
+        const initial = await getUserProgress(vaultId);
+        if (isMounted) {
+          setXp(Number(initial.xp) || 1420);
+          setLevel(Number(initial.level) || 8);
+        }
 
-    const timer3 = setTimeout(() => {
-      setShowAchievement(true);
-    }, 3000);
+        // 2. Claim reward (awards XP in Dexie & unlocks achievement)
+        const result = await claimBossReward(boss.id, 250, vaultId);
+
+        if (isMounted) {
+          setTimeout(() => {
+            setXp(result.newXp);
+            setLevel(result.newLevel);
+          }, 600);
+
+          if (result.leveledUp) {
+            setTimeout(() => {
+              setShowLevelUp(true);
+            }, 1400);
+          }
+
+          setTimeout(() => {
+            setShowAchievement(true);
+          }, 2600);
+        }
+      } catch (err) {
+        console.warn("Could not process victory rewards:", err);
+      }
+    }
+
+    processVictory();
 
     return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
+      isMounted = false;
     };
-  }, []);
+  }, [boss.id]);
 
   return (
     <div className="space-y-8 animate-in fade-in zoom-in duration-500">
@@ -117,8 +143,8 @@ export default function VictoryScreen({ boss }) {
       <LevelUpModal
         isOpen={showLevelUp}
         onClose={() => setShowLevelUp(false)}
-        level={8}
-        reward="New Penny accessory"
+        level={level}
+        reward="New Penny Victory Accessory"
       />
 
       <AchievementPopup

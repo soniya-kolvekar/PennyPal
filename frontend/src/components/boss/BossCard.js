@@ -3,15 +3,18 @@
 import Link from "next/link";
 import Image from "next/image";
 import { getBossPersonaName, getBossStateMeta } from "./BossCharacter";
+import { computeBossSpent } from "../../../lib/boss";
 import { ArrowRight, Trophy, Flame, Swords, ShieldAlert, CheckCircle2 } from "lucide-react";
 
-export default function BossCard({ boss }) {
-  const target = Number(boss.targetLimit) || 1;
-  const spent = Number(boss.spentAmount) || 0;
+export default function BossCard({ boss, transactions = [] }) {
+  const target = Number(boss?.targetLimit) || 1;
+  const spent = transactions.length > 0
+    ? computeBossSpent(boss, transactions)
+    : (Number(boss?.spentAmount) || 0);
   const remaining = target - spent;
   const progress = Math.min(100, Math.round((spent / target) * 100));
-  const isVictory = boss.status === "victory";
-  const isDefeat = boss.status === "defeat" || spent > target;
+  const isVictory = boss?.status === "victory";
+  const isDefeat = boss?.status === "defeat" || spent > target;
 
   const personaName = getBossPersonaName(boss.category);
   const meta = getBossStateMeta(boss.status, spent / target);

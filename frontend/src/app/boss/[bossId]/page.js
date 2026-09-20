@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, useEffect, useMemo, use } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import AppNavbar from "@/components/AppNavbar";
 import { db } from "../../../../lib/db";
 import { getVaultId } from "../../../../lib/vault";
 import { useLiveQuery } from "dexie-react-hooks";
+import { computeBossSpent, evaluateBossStatus } from "../../../../lib/boss";
 import BossCharacter, { getBossStateMeta } from "@/components/boss/BossCharacter";
 import BossHealthBar from "@/components/boss/BossHealthBar";
 import PennyMessage from "@/components/boss/PennyMessage";
@@ -14,7 +15,7 @@ import DamageAnimation from "@/components/boss/DamageAnimation";
 import VictoryScreen from "@/components/boss/VictoryScreen";
 import DefeatScreen from "@/components/boss/DefeatScreen";
 import PennyLoader from "@/components/PennyLoader";
-import { ArrowLeft, Swords, Plus, Sparkles } from "lucide-react";
+import { ArrowLeft, Swords, Plus, Sparkles, Trophy } from "lucide-react";
 
 export default function BossBattlePage({ params: paramsPromise }) {
   const params = use(paramsPromise);
@@ -42,16 +43,40 @@ export default function BossBattlePage({ params: paramsPromise }) {
     async () => {
       if (!db || !db.transactions || !boss) return [];
       const all = await db.transactions.toArray();
-      return all.filter((t) => t.category === boss.category);
+      const vaultScoped = all.filter((t) => !t.vaultId || t.vaultId === vaultId);
+      const category = (boss.category || "").trim().toLowerCase();
+      return vaultScoped.filter((t) => {
+        const txCat = (t.category || "").trim().toLowerCase();
+        return category === "all" || txCat === category;
+      });
     },
-    [boss]
+    [boss, vaultId]
   );
+
+  // Compute live spending directly derived from transactions
+  const spent = useMemo(() => {
+    return computeBossSpent(boss, categoryTransactions || []);
+  }, [boss, categoryTransactions]);
+
+  const target = Number(boss?.targetLimit) || 1;
+  const ratio = spent / target;
+
+  // Auto-sync status if budget is exceeded or challenge completed
+  useEffect(() => {
+    if (!boss || !boss.id) return;
+    const effectiveStatus = evaluateBossStatus(boss, spent);
+    if (effectiveStatus !== boss.status && (effectiveStatus === "defeat" || effectiveStatus === "victory")) {
+      db.bosses.update(boss.id, {
+        status: effectiveStatus,
+        spentAmount: spent
+      }).catch((err) => console.warn("Could not sync boss status:", err));
+    }
+  }, [boss?.id, boss?.status, spent]);
 
   const handleSimulateDamage = async (amount = 450, merchant = "Amazon") => {
     if (!boss) return;
 
-    const newSpent = (Number(boss.spentAmount) || 0) + amount;
-    const target = Number(boss.targetLimit) || 1;
+    const newSpent = spent + amount;
     const isOverBudget = newSpent > target;
 
     try {
@@ -77,10 +102,24 @@ export default function BossBattlePage({ params: paramsPromise }) {
       setActiveDamageFX({ amount, merchant });
       setTimeout(() => setActiveDamageFX(null), 3000);
 
-      setToastMessage(`Recorded ₹${amount} damage to ${boss.name}!`);
+      setToastMessage(`Recorded ₹${amount} expense to ${boss.name}!`);
       setTimeout(() => setToastMessage(null), 3000);
     } catch (err) {
       console.error("Failed to add damage:", err);
+    }
+  };
+
+  const handleClaimVictory = async () => {
+    if (!boss) return;
+    try {
+      await db.bosses.update(boss.id, {
+        status: "victory",
+        spentAmount: spent
+      });
+      setToastMessage(`Victory claimed against ${boss.name}!`);
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (err) {
+      console.error("Failed to claim victory:", err);
     }
   };
 
@@ -108,12 +147,18 @@ export default function BossBattlePage({ params: paramsPromise }) {
     );
   }
 
+  const bossView = {
+    ...boss,
+    spentAmount: spent,
+    status: boss.status
+  };
+
   // Render Victory or Defeat screens if completed
   if (boss.status === "victory") {
     return (
       <div className="min-h-screen bg-[#FAF9FF] text-[#5B3F91] flex flex-col font-sans relative">
         <main className="max-w-4xl w-full mx-auto px-6 py-12 flex-1">
-          <VictoryScreen boss={boss} />
+          <VictoryScreen boss={bossView} />
         </main>
       </div>
     );
@@ -123,15 +168,11 @@ export default function BossBattlePage({ params: paramsPromise }) {
     return (
       <div className="min-h-screen bg-[#FAF9FF] text-[#5B3F91] flex flex-col font-sans relative">
         <main className="max-w-4xl w-full mx-auto px-6 py-12 flex-1">
-          <DefeatScreen boss={boss} />
+          <DefeatScreen boss={bossView} />
         </main>
       </div>
     );
   }
-
-  const target = Number(boss.targetLimit) || 1;
-  const spent = Number(boss.spentAmount) || 0;
-  const ratio = spent / target;
 
   return (
     <div className="min-h-screen bg-[#FAF9FF] text-[#5B3F91] flex flex-col font-sans relative overflow-x-hidden selection:bg-[#C9B9F2] selection:text-[#5B3F91]">
@@ -154,7 +195,7 @@ export default function BossBattlePage({ params: paramsPromise }) {
       {/* MAIN CONTAINER */}
       <main className="relative z-10 max-w-4xl w-full mx-auto px-6 sm:px-12 py-8 flex flex-col gap-6 flex-1">
         {/* Navigation Breadcrumb */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/dashboard"
             className="inline-flex items-center gap-2 text-xs font-bold text-[#5B3F91] hover:text-[#8064C8] transition-colors bg-white px-3 py-1.5 rounded-lg border border-[#EAE3FA]"
@@ -163,23 +204,35 @@ export default function BossBattlePage({ params: paramsPromise }) {
             <span>Back to Dashboard</span>
           </Link>
 
-          <button
-            onClick={() => handleSimulateDamage(450, "Amazon")}
-            className="px-3.5 py-1.5 bg-[#5B3F91] hover:bg-[#4A3277] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+ Record Purchase (-₹450)</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {spent <= target && (
+              <button
+                onClick={handleClaimVictory}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+              >
+                <Trophy className="w-3.5 h-3.5" />
+                <span>Claim Victory</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => handleSimulateDamage(450, "Amazon")}
+              className="px-3.5 py-1.5 bg-[#5B3F91] hover:bg-[#4A3277] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Record Purchase (-₹450)</span>
+            </button>
+          </div>
         </div>
 
         {/* 1. POLAR BEAR CENTERSTAGE */}
-        <BossCharacter boss={boss} />
+        <BossCharacter boss={bossView} />
 
         {/* 2. BOSS HEALTH BAR */}
-        <BossHealthBar boss={boss} />
+        <BossHealthBar boss={bossView} />
 
         {/* 3. PENNY COACH MESSAGE */}
-        <PennyMessage status={boss.status} ratio={ratio} />
+        <PennyMessage status={bossView.status} ratio={ratio} />
 
         {/* 4. RECENT DAMAGE LOG */}
         <DamageAnimation
