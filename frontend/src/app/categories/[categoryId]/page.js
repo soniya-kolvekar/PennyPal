@@ -29,6 +29,8 @@ import {
   Wallet
 } from "lucide-react";
 
+import { calculateLastMonthSpending } from "../../../../lib/boss";
+
 export function getCategoryIcon(category) {
   switch (category) {
     case "Food":
@@ -129,10 +131,12 @@ export default function CategoryDetailPage({ params: paramsPromise }) {
   }
 
   const txList = transactions || [];
+  const now = new Date();
+  const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const thisMonthSpent = txList
-    .filter((t) => t.type !== "income")
+    .filter((t) => t.type !== "income" && t.status !== "deleted" && t.date && t.date.startsWith(currentMonthPrefix))
     .reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-  const lastMonthSpent = thisMonthSpent > 0 ? Math.round(thisMonthSpent * 1.8) : 5000;
+  const lastMonthSpent = calculateLastMonthSpending(categoryId, txList);
 
   const IconComp = getCategoryIcon(categoryId);
 
