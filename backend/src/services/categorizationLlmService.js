@@ -1,6 +1,7 @@
 const {
     ollamaClient,
-    OLLAMA_MODEL
+    OLLAMA_MODEL,
+    OLLAMA_TIMEOUT_MS
 } = require("../config/ollama");
 
 const CANONICAL_CATEGORIES = [
@@ -349,9 +350,9 @@ Amount: ${transaction.amount ?? "Unknown"}
 Type: ${transaction.type || "expense"}
 `;
 
-        // Run Ollama with a 10s promise race timeout so users never get stuck
+        // Run Ollama with a configurable promise race timeout
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Ollama request timed out after 10 seconds")), 10000)
+            setTimeout(() => reject(new Error("Ollama request timed out")), OLLAMA_TIMEOUT_MS || 120000)
         );
 
         const ollamaPromise = askOllama({

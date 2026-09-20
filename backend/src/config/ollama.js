@@ -10,7 +10,11 @@ const ollamaClient = new Ollama({
 const OLLAMA_MODEL =
   process.env.OLLAMA_MODEL || "llama3.1:8b";
 
+const OLLAMA_TIMEOUT_MS =
+  parseInt(process.env.OLLAMA_TIMEOUT_MS, 10) || 120000;
+
 module.exports = {
   ollamaClient,
-  OLLAMA_MODEL
+  OLLAMA_MODEL,
+  OLLAMA_TIMEOUT_MS
 };

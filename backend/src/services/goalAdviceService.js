@@ -1,6 +1,7 @@
 const {
     ollamaClient,
-    OLLAMA_MODEL
+    OLLAMA_MODEL,
+    OLLAMA_TIMEOUT_MS
 } = require("../config/ollama");
 
 
@@ -81,7 +82,7 @@ Goal Details:
             new Promise((_, reject) =>
                 setTimeout(
                     () => reject(new Error("Ollama timeout")),
-                    10000
+                    OLLAMA_TIMEOUT_MS || 120000
                 )
             )
         ]);

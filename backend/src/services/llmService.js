@@ -1,6 +1,7 @@
 const {
     ollamaClient,
-    OLLAMA_MODEL
+    OLLAMA_MODEL,
+    OLLAMA_TIMEOUT_MS
 } = require("../config/ollama");
 const { findRelevantKnowledge } = require("./ragService");
 
@@ -212,7 +213,7 @@ No financial context has been provided yet.
                 }
             }),
             new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("Ollama timeout")), 8000)
+                setTimeout(() => reject(new Error("Ollama timeout")), OLLAMA_TIMEOUT_MS || 120000)
             )
         ]);
 
