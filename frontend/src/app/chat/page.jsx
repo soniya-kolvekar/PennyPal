@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import AppNavbar from "../../components/AppNavbar";
 import {
   Send,
   RotateCcw,
@@ -226,53 +227,7 @@ export default function ChatPage() {
       <div className="absolute bottom-10 left-10 w-[450px] h-[450px] bg-[#F6C9D5] rounded-full blur-3xl opacity-30 pointer-events-none" />
 
       {/* NAVBAR */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md bg-[#FAF9FF]/90 border-b border-[#EAE3FA]/80 px-6 sm:px-12 py-2 transition-all shrink-0">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/logoo.png"
-              alt="PennyPal Logo"
-              width={160}
-              height={50}
-              style={{ width: "auto", height: "auto" }}
-              className="h-9 sm:h-10 object-contain"
-              priority
-            />
-          </Link>
-
-          <div className="hidden md:flex items-center gap-8 text-base font-bold text-[#5B3F91]">
-            <Link href="/" className="hover:text-[#8064C8] transition-colors">
-              Home
-            </Link>
-            <Link href="/dashboard" className="hover:text-[#8064C8] transition-colors">
-              Dashboard
-            </Link>
-            <Link href="/calendar" className="hover:text-[#8064C8] transition-colors">
-              Calendar
-            </Link>
-            <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
-              Upload
-            </Link>
-            <Link href="/settings" className="hover:text-[#8064C8] transition-colors">
-              Settings
-            </Link>
-            <Link href="/chat" className="text-[#8064C8] transition-colors">
-              Chat
-            </Link>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={startNewChat}
-              className="px-3.5 py-1.5 bg-white hover:bg-[#FAF9FF] border border-[#EAE3FA] text-[#5B3F91] hover:text-[#8064C8] font-bold text-xs rounded-full shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-[#8064C8]" />
-              <span>Reset Chat</span>
-            </button>
-          </div>
-        </div>
-      </nav>
+      <AppNavbar />
 
       {/* MAIN CHAT AREA */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-4 max-w-5xl w-full mx-auto overflow-hidden">
@@ -307,9 +262,21 @@ export default function ChatPage() {
               </div>
             </div>
 
-            <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-[#8064C8] bg-[#FAF9FF] px-3 py-1.5 rounded-full border border-[#EAE3FA]">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#8064C8]" />
-              <span>100% Local & Private</span>
+            <div className="flex items-center gap-2.5">
+              <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-[#8064C8] bg-[#FAF9FF] px-3 py-1.5 rounded-full border border-[#EAE3FA]">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#8064C8]" />
+                <span>100% Local & Private</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={startNewChat}
+                className="px-3 py-1.5 bg-white hover:bg-[#FAF9FF] border border-[#EAE3FA] text-[#5B3F91] hover:text-[#8064C8] font-bold text-xs rounded-full shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Start a fresh chat conversation"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-[#8064C8]" />
+                <span className="hidden sm:inline">Reset Chat</span>
+              </button>
             </div>
           </div>
 

@@ -15,3 +15,7 @@ db.version(2).stores({
     chatMessages: "++id, vaultId, conversationId, role, createdAt",
     settings: "id, vaultId"
 });
+
+db.version(3).stores({
+    bosses: "id, vaultId, category, status"
+});

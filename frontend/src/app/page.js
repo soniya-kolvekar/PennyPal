@@ -73,23 +73,8 @@ export default function LandingPage() {
             />
           </Link>
 
-          {/* Navigation Links */}
+          {/* Navigation Links (Public Landing Only) */}
           <div className="hidden md:flex items-center gap-8 text-base sm:text-lg font-bold text-[#5B3F91]">
-            <Link href="/dashboard" className="hover:text-[#8064C8] transition-colors">
-              Dashboard
-            </Link>
-            <Link href="/calendar" className="hover:text-[#8064C8] transition-colors">
-              Calendar
-            </Link>
-            <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
-              Upload Statement
-            </Link>
-            <Link href="/settings" className="hover:text-[#8064C8] transition-colors">
-              Settings
-            </Link>
-            <Link href="/chat" className="hover:text-[#8064C8] transition-colors">
-              Chat
-            </Link>
             <a href="#features" className="hover:text-[#8064C8] transition-colors">
               Features
             </a>
