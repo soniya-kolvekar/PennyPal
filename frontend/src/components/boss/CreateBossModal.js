@@ -1,12 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { X, Swords, Sparkles, Trophy, Sliders } from "lucide-react";
 import { getBossPersonaName } from "./BossCharacter";
 
-export default function CreateBossModal({ isOpen, onClose, category = "Shopping", lastMonthSpending = 5000, onSave }) {
-  const [targetLimit, setTargetLimit] = useState(() => Math.round(lastMonthSpending * 0.7));
+export default function CreateBossModal({ isOpen, onClose, category = "Shopping", lastMonthSpending = 0, onSave }) {
+  const [targetLimit, setTargetLimit] = useState(() => (lastMonthSpending > 0 ? Math.round(lastMonthSpending * 0.7) : 2500));
+
+  useEffect(() => {
+    if (lastMonthSpending > 0) {
+      setTargetLimit(Math.max(200, Math.round(lastMonthSpending * 0.7)));
+    } else {
+      setTargetLimit(2500);
+    }
+  }, [lastMonthSpending, category]);
 
   if (!isOpen) return null;
 

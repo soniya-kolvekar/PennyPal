@@ -7,7 +7,7 @@ import AppNavbar from "@/components/AppNavbar";
 import { db } from "../../../../lib/db";
 import { getVaultId } from "../../../../lib/vault";
 import { useLiveQuery } from "dexie-react-hooks";
-import { computeBossSpent, evaluateBossStatus } from "../../../../lib/boss";
+import { computeBossSpent, evaluateBossStatus, getBossTransactions } from "../../../../lib/boss";
 import BossCharacter, { getBossStateMeta } from "@/components/boss/BossCharacter";
 import BossHealthBar from "@/components/boss/BossHealthBar";
 import PennyMessage from "@/components/boss/PennyMessage";
@@ -38,17 +38,13 @@ export default function BossBattlePage({ params: paramsPromise }) {
     [bossId]
   );
 
-  // Fetch transactions for this boss category
+  // Fetch transactions for this boss category strictly within the active challenge period
   const categoryTransactions = useLiveQuery(
     async () => {
       if (!db || !db.transactions || !boss) return [];
       const all = await db.transactions.toArray();
       const vaultScoped = all.filter((t) => !t.vaultId || t.vaultId === vaultId);
-      const category = (boss.category || "").trim().toLowerCase();
-      return vaultScoped.filter((t) => {
-        const txCat = (t.category || "").trim().toLowerCase();
-        return category === "all" || txCat === category;
-      });
+      return getBossTransactions(boss, vaultScoped);
     },
     [boss, vaultId]
   );
@@ -80,7 +76,9 @@ export default function BossBattlePage({ params: paramsPromise }) {
     const isOverBudget = newSpent > target;
 
     try {
-      // Add damage transaction to DB
+      const todayStr = new Date().toISOString().split("T")[0];
+
+      // Add damage transaction to DB (triggers useLiveQuery reactivity instantly)
       await db.transactions.add({
         id: `tx-${Date.now()}`,
         vaultId,
@@ -88,11 +86,12 @@ export default function BossBattlePage({ params: paramsPromise }) {
         category: boss.category,
         amount,
         type: "expense",
-        date: new Date().toISOString().split("T")[0],
+        date: todayStr,
+        createdAt: new Date().toISOString(),
         status: "active"
       });
 
-      // Update boss spent amount
+      // Update boss spent amount in Dexie
       await db.bosses.update(boss.id, {
         spentAmount: newSpent,
         status: isOverBudget ? "defeat" : boss.status || "active"

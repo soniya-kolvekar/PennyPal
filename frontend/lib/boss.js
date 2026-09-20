@@ -45,6 +45,100 @@ export function computeBossSpent(boss, transactions = []) {
 }
 
 /**
+ * Returns filtered and sorted transactions for an active boss challenge:
+ * - Matching category
+ * - Expense only
+ * - Between boss startDate and endDate
+ * - Sorted newest first
+ *
+ * @param {Object} boss
+ * @param {Array} transactions
+ * @returns {Array} matching transactions sorted newest first
+ */
+export function getBossTransactions(boss, transactions = []) {
+  if (!boss || !Array.isArray(transactions)) return [];
+
+  const category = (boss.category || "").trim().toLowerCase();
+  const startDate = boss.startDate || "1970-01-01";
+  const endDate = boss.endDate || "2099-12-31";
+
+  return transactions
+    .filter((tx) => {
+      const isExpense = tx.type?.toLowerCase() === "expense" || (!tx.type && Number(tx.amount) > 0);
+      if (!isExpense) return false;
+      if (tx.status === "deleted") return false;
+
+      const txCat = (tx.category || "").trim().toLowerCase();
+      const matchesCat = category === "all" || txCat === category;
+      if (!matchesCat) return false;
+
+      if (tx.date) {
+        if (tx.date < startDate || tx.date > endDate) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const dateA = a.date || a.createdAt || "";
+      const dateB = b.date || b.createdAt || "";
+      return dateB.localeCompare(dateA);
+    });
+}
+
+/**
+ * Dynamically computes total spending in a category for the previous calendar month from real transactions.
+ *
+ * @param {string} category
+ * @param {Array} transactions
+ * @returns {number} actual spent in the previous month
+ */
+export function calculateLastMonthSpending(category, transactions = []) {
+  if (!Array.isArray(transactions) || transactions.length === 0) return 0;
+
+  const cat = (category || "").trim().toLowerCase();
+
+  const now = new Date();
+  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastMonthYear = lastMonthDate.getFullYear();
+  const lastMonthNum = String(lastMonthDate.getMonth() + 1).padStart(2, "0");
+  const lastMonthPrefix = `${lastMonthYear}-${lastMonthNum}`;
+
+  const lastMonthTxs = transactions.filter((tx) => {
+    const isExpense = tx.type?.toLowerCase() === "expense" || (!tx.type && Number(tx.amount) > 0);
+    if (!isExpense) return false;
+    if (tx.status === "deleted") return false;
+
+    const txCat = (tx.category || "").trim().toLowerCase();
+    const matchesCat = cat === "all" || txCat === cat;
+    if (!matchesCat) return false;
+
+    return Boolean(tx.date && tx.date.startsWith(lastMonthPrefix));
+  });
+
+  const sum = lastMonthTxs.reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0);
+  if (sum > 0) return sum;
+
+  // Fallback: check 30 days window before the 1st of current month
+  const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const thirtyDaysBefore = new Date(new Date(currentMonthStart).getTime() - 30 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split("T")[0];
+
+  const fallbackTxs = transactions.filter((tx) => {
+    const isExpense = tx.type?.toLowerCase() === "expense" || (!tx.type && Number(tx.amount) > 0);
+    if (!isExpense) return false;
+    if (tx.status === "deleted") return false;
+
+    const txCat = (tx.category || "").trim().toLowerCase();
+    const matchesCat = cat === "all" || txCat === cat;
+    if (!matchesCat) return false;
+
+    return Boolean(tx.date && tx.date >= thirtyDaysBefore && tx.date < currentMonthStart);
+  });
+
+  return fallbackTxs.reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0);
+}
+
+/**
  * Evaluates the current state of a boss battle based on target limit, spent amount, and date.
  *
  * @param {Object} boss

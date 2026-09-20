@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import AppNavbar from "@/components/AppNavbar";
 import { useRouter } from "next/navigation";
 import { db } from "../../../../lib/db";
 import { getVaultId } from "../../../../lib/vault";
+import { useLiveQuery } from "dexie-react-hooks";
+import { calculateLastMonthSpending } from "../../../../lib/boss";
 import { getBossPersonaName } from "@/components/boss/BossCharacter";
 import { ArrowLeft, Swords, Sparkles, Trophy, Sliders } from "lucide-react";
 
@@ -28,11 +30,40 @@ const CANONICAL_CATEGORIES = [
 export default function StandaloneCreateBossPage() {
   const router = useRouter();
   const [category, setCategory] = useState("Shopping");
-  const [lastMonthSpending, setLastMonthSpending] = useState(5000);
+  const [lastMonthSpending, setLastMonthSpending] = useState(0);
   const [targetLimit, setTargetLimit] = useState(3000);
 
   const vaultId = typeof window !== "undefined" ? getVaultId() : "default_vault";
   const personaName = getBossPersonaName(category);
+
+  // Fetch all user transactions live from Dexie
+  const transactions = useLiveQuery(
+    async () => {
+      try {
+        if (!db || !db.transactions) return [];
+        const items = await db.transactions.toArray();
+        return items.filter((t) => !t.vaultId || t.vaultId === vaultId);
+      } catch {
+        return [];
+      }
+    },
+    [vaultId]
+  );
+
+  // Dynamically compute real last month spending for the selected category
+  const dynamicLastMonth = useMemo(() => {
+    return calculateLastMonthSpending(category, transactions || []);
+  }, [category, transactions]);
+
+  // When category changes or transactions load, update last month spending and auto-suggest target
+  useEffect(() => {
+    setLastMonthSpending(dynamicLastMonth);
+    if (dynamicLastMonth > 0) {
+      setTargetLimit(Math.max(200, Math.round(dynamicLastMonth * 0.7)));
+    } else {
+      setTargetLimit(3000);
+    }
+  }, [dynamicLastMonth, category]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -151,9 +182,9 @@ export default function StandaloneCreateBossPage() {
 
               <input
                 type="range"
-                min="500"
-                max={lastMonthSpending * 1.5}
-                step="250"
+                min="100"
+                max={Math.max(10000, Math.round((lastMonthSpending || 5000) * 1.5))}
+                step="100"
                 value={targetLimit}
                 onChange={(e) => setTargetLimit(Number(e.target.value))}
                 className="w-full accent-[#5B3F91] cursor-pointer"
