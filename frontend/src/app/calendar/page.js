@@ -263,6 +263,9 @@ export default function CalendarPage() {
             <Link href="/calendar" className="text-[#8064C8] transition-colors">
               Calendar
             </Link>
+            <Link href="/goals" className="hover:text-[#8064C8] transition-colors">
+              Goals
+            </Link>
             <Link href="/upload" className="hover:text-[#8064C8] transition-colors">
               Upload
             </Link>
