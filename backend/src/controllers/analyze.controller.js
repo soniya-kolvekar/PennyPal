@@ -106,7 +106,7 @@ async function analyzeStatement(req, res, next) {
 
 async function categorizeTransactions(req, res, next) {
     try {
-        const { transactions } = req.body;
+        const { transactions, userCorrections = {} } = req.body;
 
         if (!Array.isArray(transactions)) {
             return res.status(400).json({
@@ -125,7 +125,7 @@ async function categorizeTransactions(req, res, next) {
         const categorizedTransactions = [];
 
         for (const transaction of transactions) {
-            const result = await categorizeTransaction(transaction);
+            const result = await categorizeTransaction(transaction, userCorrections);
 
             categorizedTransactions.push({
                 ...transaction,
@@ -133,6 +133,7 @@ async function categorizeTransactions(req, res, next) {
                 categoryConfidence: result.confidence,
                 categoryReason: result.reason,
                 categorySource: result.source,
+                normalizedMerchant: result.normalizedMerchant || transaction.merchant,
                 updatedAt: new Date().toISOString()
             });
         }

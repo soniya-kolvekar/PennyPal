@@ -41,20 +41,24 @@ import {
   cancelImportBatch,
   detectPossibleDuplicates,
   getTransactions,
-  getVaultId
+  getVaultId,
+  bulkUpdateTransactionCategories,
+  predictCategory
 } from "../../../lib/vault";
 
 
 const CATEGORIES = [
-  "Food & Dining",
+  "Food",
   "Shopping",
-  "Groceries",
-  "Travel",
+  "Transport",
+  "Bills",
+  "Subscriptions",
   "Entertainment",
-  "Utilities",
-  "Health",
-  "Salary",
-  "Income",
+  "Healthcare",
+  "Education",
+  "Rent",
+  "Travel",
+  "Personal",
   "Other"
 ];
 
@@ -69,20 +73,29 @@ const SOURCES = [
 
 function getCategoryIcon(category) {
   switch (category) {
-    case "Food & Dining":
-      return <Utensils className="w-5 h-5 text-[#8064C8]" />;
+    case "Food":
+      return <Utensils className="w-5 h-5 text-orange-500" />;
     case "Shopping":
-      return <ShoppingBag className="w-5 h-5 text-[#8064C8]" />;
-    case "Travel":
-      return <Car className="w-5 h-5 text-[#8064C8]" />;
+      return <ShoppingBag className="w-5 h-5 text-purple-500" />;
+    case "Transport":
+      return <Car className="w-5 h-5 text-blue-500" />;
+    case "Bills":
+      return <Zap className="w-5 h-5 text-amber-500" />;
+    case "Subscriptions":
+      return <Tv className="w-5 h-5 text-indigo-500" />;
     case "Entertainment":
-      return <Tv className="w-5 h-5 text-[#8064C8]" />;
-    case "Salary":
-    case "Income":
-      return <TrendingUp className="w-5 h-5 text-emerald-600" />;
-    case "Utilities":
-    case "Groceries":
-    case "Health":
+      return <Tv className="w-5 h-5 text-pink-500" />;
+    case "Healthcare":
+      return <Heart className="w-5 h-5 text-emerald-500" />;
+    case "Education":
+      return <FileText className="w-5 h-5 text-cyan-500" />;
+    case "Rent":
+      return <Building2 className="w-5 h-5 text-violet-500" />;
+    case "Travel":
+      return <Car className="w-5 h-5 text-sky-500" />;
+    case "Personal":
+      return <Sparkles className="w-5 h-5 text-teal-500" />;
+    case "Other":
     default:
       return <Wallet className="w-5 h-5 text-[#8064C8]" />;
   }
@@ -135,7 +148,7 @@ export default function UploadPage() {
     desc: "",
     amount: "",
     type: "Expense",
-    category: "Shopping",
+    category: "Other",
     source: "manual_entry"
   });
 
@@ -223,7 +236,7 @@ export default function UploadPage() {
     }
   };
 
-  // Confirm import: Promote pending transactions to active in IndexedDB
+  // Confirm import: Promote pending transactions to active in IndexedDB, then run hybrid categorization
   const handleConfirmImport = async () => {
     try {
       setIsConfirming(true);
@@ -233,13 +246,58 @@ export default function UploadPage() {
         merchant: t.desc,
         amount: Number(t.amount),
         type: t.type.toLowerCase() === "income" ? "income" : "expense",
-        category: t.category,
+        category: t.category || "Other",
         source: t.source || "bank_statement",
         reconciledWith: t.reconciledWith || null,
       }));
 
       const batchId = currentBatchId || crypto.randomUUID();
+
+      // 1. Commit confirmed transactions to local Dexie vault
       await confirmImportBatch(batchId, canonical);
+
+      // 2. Run post-import hybrid AI & deterministic categorization
+      const token = getAuthToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
+
+      if (token) {
+        try {
+          const catRes = await fetch(`${backendUrl}/api/analyze/categorize`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              transactions: canonical
+            })
+          });
+
+          if (catRes.ok) {
+            const catData = await catRes.json();
+            if (catData.success && Array.isArray(catData.transactions)) {
+              // Update local IndexedDB records with the smart categorized categories
+              await bulkUpdateTransactionCategories(catData.transactions);
+
+              // Update in-memory state so dashboard and success view reflect categories immediately
+              setTransactions(catData.transactions.map((ctx) => ({
+                id: ctx.id,
+                date: ctx.date,
+                desc: ctx.merchant,
+                amount: ctx.amount,
+                type: ctx.type === "income" ? "Income" : "Expense",
+                category: ctx.category,
+                source: ctx.source,
+                reconciledWith: ctx.reconciledWith,
+              })));
+            }
+          }
+        } catch (catErr) {
+          console.warn("Post-import categorization network notification:", catErr);
+          // Transactions are safely saved in local vault, proceed seamlessly
+        }
+      }
+
       await loadActiveTransactions();
       setStep("success");
     } catch (err) {
@@ -335,13 +393,24 @@ export default function UploadPage() {
       // Removed staging here since we only stage on confirm now
     }
 
+    const trimmedDesc = newTx.desc.trim();
+    let assignedCategory = newTx.category || "Other";
+
+    // Auto-predict category for manual entries if still set to 'Other' or uncategorized
+    if (!assignedCategory || assignedCategory === "Other") {
+      const predicted = predictCategory(trimmedDesc);
+      if (predicted && predicted !== "Other") {
+        assignedCategory = predicted;
+      }
+    }
+
     const created = {
       id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
       date: newTx.date || new Date().toISOString().split("T")[0],
-      desc: newTx.desc.trim(),
+      desc: trimmedDesc,
       amount: parseFloat(newTx.amount) || 0,
       type: newTx.type,
-      category: newTx.category,
+      category: assignedCategory,
       source: newTx.source || "manual_entry",
       importBatchId: batchId,
     };
@@ -380,7 +449,7 @@ export default function UploadPage() {
       desc: "",
       amount: "",
       type: "Expense",
-      category: "Shopping",
+      category: "Other",
       source: "manual_entry"
     });
   };
@@ -1002,7 +1071,7 @@ export default function UploadPage() {
 
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
               <Link
-                href="/"
+                href="/dashboard"
                 className="w-full sm:w-auto px-8 py-4 bg-[#8064C8] hover:bg-[#6F53B7] text-white font-bold text-base rounded-full shadow-xl shadow-[#8064C8]/30 flex items-center justify-center gap-3 transition-all hover:scale-105"
               >
                 <span>Go to Dashboard</span>
@@ -1181,10 +1250,18 @@ export default function UploadPage() {
                 <label className="block text-xs font-bold text-[#5B3F91] mb-1">Description</label>
                 <input
                   type="text"
-                  placeholder="e.g. Swiggy, Amazon, Salary"
+                  placeholder="e.g. Swiggy, Amazon, Uber, Salary"
                   required
                   value={newTx.desc}
-                  onChange={(e) => setNewTx({ ...newTx, desc: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const autoCat = predictCategory(val);
+                    setNewTx((prev) => ({
+                      ...prev,
+                      desc: val,
+                      category: autoCat !== "Other" ? autoCat : (prev.category === "Other" ? autoCat : prev.category)
+                    }));
+                  }}
                   className="w-full px-4 py-2.5 bg-[#FAF9FF] rounded-xl border border-[#EAE3FA] text-sm text-[#5B3F91] font-semibold focus:outline-none focus:ring-2 focus:ring-[#8064C8]"
                 />
               </div>

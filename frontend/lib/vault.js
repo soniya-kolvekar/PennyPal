@@ -134,7 +134,41 @@ export async function getPendingTransactions(importBatchId = null) {
 // =========================================================================
 
 /**
+ * Client-side deterministic category predictor for manual transactions & instant previews.
+ */
+export function predictCategory(text = "") {
+  if (!text || typeof text !== "string") return "Other";
+  const upper = text.toUpperCase();
+
+  const rules = [
+    { cat: "Food", kws: ["SWIGGY", "ZOMATO", "MCDONALD", "DOMINO", "KFC", "PIZZA", "STARBUCKS", "CHAAYOS", "CHAI", "BURGER", "SUBWAY", "BLINKIT", "INSTAMART", "ZEPTO", "BIGBASKET", "DMART", "BAKERY", "RESTAURANT", "CAFE", "COFFEE", "DINING", "DHABA", "BISTRO", "KITCHEN", "EAT", "FOOD", "HALDIRAM", "BIRYANI", "GROCERY", "GROCERIES", "FRUIT", "VEGETABLE"] },
+    { cat: "Shopping", kws: ["AMAZON", "FLIPKART", "MYNTRA", "AJIO", "MEESHO", "NYKAA", "TATA CLIQ", "ZARA", "H&M", "UNIQLO", "DECATHLON", "CROMA", "RELIANCE DIGITAL", "IKEA", "SHOPPING", "MALL", "BOUTIQUE", "JEWELLER", "TANISHQ", "LENSKART", "FOOTWEAR", "CLOTHING", "APPAREL", "SHOES", "FASHION"] },
+    { cat: "Transport", kws: ["UBER", "OLA", "RAPIDO", "METRO", "DMRC", "BMRC", "IRCTC", "RAILWAY", "PETROL", "DIESEL", "FUEL", "INDIAN OIL", "BPCL", "HPCL", "SHELL", "FASTAG", "TOLL", "PARKING", "AUTO", "CAB", "TAXI", "BUS", "REDBUS"] },
+    { cat: "Bills", kws: ["ELECTRICITY", "POWER", "BESCOM", "TNEB", "MSEB", "WATER BILL", "GAS BILL", "IGL", "INDANE", "BROADBAND", "WIFI", "AIRTEL", "JIO", "VI PREPAID", "VODAFONE", "FIBERNET", "DTH", "POSTPAID", "BILLDESK", "UTILITY", "MAINTENANCE"] },
+    { cat: "Subscriptions", kws: ["NETFLIX", "SPOTIFY", "AMAZON PRIME", "PRIME VIDEO", "DISNEY", "HOTSTAR", "YOUTUBE", "APPLE MUSIC", "APPLE.COM", "GOOGLE PLAY", "STORAGE", "ICLOUD", "CHATGPT", "OPENAI", "GITHUB", "ADOBE", "AUDIBLE", "SUBSCRIPTION"] },
+    { cat: "Entertainment", kws: ["BOOKMYSHOW", "PVR", "INOX", "CINEPOLIS", "CINEMA", "THEATRE", "STEAM", "PLAYSTATION", "XBOX", "GAMING", "CONCERT", "BOWLING", "MOVIES"] },
+    { cat: "Healthcare", kws: ["APOLLO", "NETMEDS", "PHARMEASY", "1MG", "MEDPLUS", "PHARMACY", "CHEMIST", "HOSPITAL", "CLINIC", "DOCTOR", "DIAGNOSTIC", "DENTAL", "MEDICINE"] },
+    { cat: "Education", kws: ["UDEMY", "COURSERA", "EDX", "SCHOOL", "COLLEGE", "UNIVERSITY", "TUITION", "COACHING", "ALLEN", "BYJU", "UNACADEMY", "BOOKSTORE", "STATIONERY", "COURSE", "EDUCATION"] },
+    { cat: "Rent", kws: ["RENT", "HOUSE RENT", "FLAT RENT", "LANDLORD", "NOBROKER", "HOUSING", "PG FEE", "TENANT"] },
+    { cat: "Travel", kws: ["MAKEMYTRIP", "MMT", "CLEARTRIP", "YATRA", "GOIBIBO", "INDIGO", "AIR INDIA", "VISTARA", "SPICEJET", "FLIGHT", "HOTEL", "RESORT", "AIRBNB", "BOOKING.COM", "OYO", "TRAVEL"] },
+    { cat: "Personal", kws: ["SALON", "PARLOUR", "SPA", "BARBER", "GYM", "FITNESS", "CULT FIT", "CULTFIT", "ANYTIME FITNESS", "BEAUTY", "SKINCARE"] },
+    { cat: "Other", kws: ["ATM", "CASH WITHDRAWAL", "SELF TRANSFER", "INTEREST", "CHARGES", "TAX"] }
+  ];
+
+  for (const rule of rules) {
+    for (const kw of rule.kws) {
+      if (upper.includes(kw)) {
+        return rule.cat;
+      }
+    }
+  }
+
+  return "Other";
+}
+
+/**
  * Add a new manual transaction into the current vault.
+ * Automatically predicts canonical category if not provided or set to 'Other'.
  */
 export async function addTransaction(transactionData) {
   const vaultId = getVaultId();
@@ -145,19 +179,30 @@ export async function addTransaction(transactionData) {
     throw new Error("Amount must be a valid positive number.");
   }
 
+  const rawMerchant = (transactionData.merchant || transactionData.desc || "Unknown").trim();
+  let assignedCategory = transactionData.category || "Other";
+
+  // If category wasn't chosen or is default, try deterministic auto-categorization
+  if (!assignedCategory || assignedCategory === "Other" || assignedCategory === "Uncategorized") {
+    const predicted = predictCategory(rawMerchant || transactionData.originalDescription);
+    if (predicted && predicted !== "Other") {
+      assignedCategory = predicted;
+    }
+  }
+
   const newTx = {
     id: transactionData.id || crypto.randomUUID(),
     vaultId,
     date: transactionData.date || now.split("T")[0],
-    merchant: (transactionData.merchant || "Unknown").trim(),
+    merchant: rawMerchant,
     amount,
-    type: transactionData.type === "income" ? "income" : "expense",
-    category: transactionData.category || "Other",
+    type: transactionData.type?.toLowerCase() === "income" ? "income" : "expense",
+    category: assignedCategory,
     source: transactionData.source || "manual",
     status: transactionData.status || "active",
     reconciledWith: transactionData.reconciledWith || null,
-    originalDescription: transactionData.originalDescription || transactionData.merchant || "",
-    originalMerchant: transactionData.originalMerchant || transactionData.merchant || "",
+    originalDescription: transactionData.originalDescription || rawMerchant || "",
+    originalMerchant: transactionData.originalMerchant || rawMerchant || "",
     importBatchId: transactionData.importBatchId || null,
     createdAt: transactionData.createdAt || now,
     updatedAt: now,
@@ -190,6 +235,48 @@ export async function updateTransaction(id, updates) {
 
   await db.transactions.put(updatedTx);
   return updatedTx;
+}
+
+/**
+ * Bulk updates categories and categorization metadata for transactions in the local vault.
+ * Useful after running hybrid/Ollama categorization post-import.
+ */
+export async function bulkUpdateTransactionCategories(categorizedTransactions = []) {
+  if (!Array.isArray(categorizedTransactions) || categorizedTransactions.length === 0) {
+    return 0;
+  }
+
+  const vaultId = getVaultId();
+  const now = new Date().toISOString();
+
+  let updatedCount = 0;
+
+  await db.transaction("rw", db.transactions, async () => {
+    for (const catTx of categorizedTransactions) {
+      if (!catTx.id) continue;
+      const existing = await db.transactions.get(catTx.id);
+      if (existing && existing.vaultId === vaultId) {
+        existing.category = catTx.category || existing.category || "Other";
+        if (catTx.categoryConfidence !== undefined) {
+          existing.categoryConfidence = catTx.categoryConfidence;
+        }
+        if (catTx.categoryReason !== undefined) {
+          existing.categoryReason = catTx.categoryReason;
+        }
+        if (catTx.categorySource !== undefined) {
+          existing.categorySource = catTx.categorySource;
+        }
+        if (catTx.normalizedMerchant) {
+          existing.merchant = catTx.normalizedMerchant;
+        }
+        existing.updatedAt = now;
+        await db.transactions.put(existing);
+        updatedCount++;
+      }
+    }
+  });
+
+  return updatedCount;
 }
 
 /**
