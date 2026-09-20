@@ -1,5 +1,8 @@
 import { db } from "./db";
 import { getVaultId } from "./vault";
+import { getAuthToken } from "./auth";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
 
 // =========================================================================
 // GOALS HELPERS (Scoped strictly to current vaultId)
@@ -146,4 +149,78 @@ export async function deleteGoal(goalId) {
 
   await db.goals.delete(goalId);
   return true;
+}
+
+/**
+ * Fetch motivational coaching advice from Penny for a specific goal.
+ * Calls backend POST /api/goals/advice (protected route).
+ * Falls back to client-side motivational advice if offline.
+ */
+export async function fetchGoalAdvice(goal) {
+  if (!goal) return "";
+
+  const token = getAuthToken();
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/goals/advice`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ goal })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.advice) {
+        return data.advice;
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to fetch dynamic goal advice from backend:", err);
+  }
+
+  // Graceful client-side fallback
+  const target = Number(goal.targetAmount) || 1;
+  const saved = Number(goal.savedAmount) || 0;
+  const pct = Math.round((saved / target) * 100);
+
+  if (pct >= 100) {
+    return `🎉 You did it! You've saved the full ₹${target.toLocaleString("en-IN")} for ${goal.title}! Penny is doing a happy waddle dance! 🐧 Take a moment to celebrate!`;
+  }
+  if (pct >= 75) {
+    return `You're SO close to your ${goal.title} goal! 🐧✨ You've already reached ${pct}%. Only ₹${Math.max(0, target - saved).toLocaleString("en-IN")} left to go!`;
+  }
+  if (pct >= 50) {
+    return `Halfway there! 🐧 Saving ₹${saved.toLocaleString("en-IN")} for ${goal.title} takes commitment. Keep going one step at a time!`;
+  }
+  return `Welcome to your ${goal.title} journey! 🐧 Every big goal starts with a single step. Start with small, consistent deposits and watch your savings grow!`;
+}
+
+/**
+ * Fetch saving plan analysis for a goal and financial context.
+ * Calls backend POST /api/goals/plan (protected route).
+ */
+export async function fetchGoalPlan(goal, analytics) {
+  if (!goal || !analytics) return null;
+
+  const token = getAuthToken();
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/goals/plan`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ goal, analytics })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.plan || null;
+    }
+  } catch (err) {
+    console.warn("Failed to fetch goal plan:", err);
+  }
+  return null;
 }

@@ -9,6 +9,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import GoalCard from "@/components/goals/GoalCard";
 import CreateGoalModal from "@/components/goals/CreateGoalModal";
 import GoalCelebrationModal from "@/components/goals/GoalCelebrationModal";
+import { createGoal, deleteGoal } from "../../../lib/goals";
 import {
   Target,
   Plus,
@@ -120,16 +121,14 @@ export default function GoalsPage() {
 
   const handleSaveNewGoal = async (newGoalData) => {
     try {
-      const goalToSave = {
-        ...newGoalData,
-        vaultId
-      };
-      await db.goals.add(goalToSave);
-      setCelebrationGoal(goalToSave);
-      setCelebrationType(goalToSave.status === "completed" ? "completed" : "created");
+      const created = await createGoal(newGoalData);
+      setCelebrationGoal(created);
+      setCelebrationType(created.status === "completed" ? "completed" : "created");
       setShowCelebrationModal(true);
     } catch (err) {
-      console.error("Error saving goal to Dexie:", err);
+      console.error("Error saving goal:", err);
+      setToastMessage(err.message || "Failed to create goal.");
+      setTimeout(() => setToastMessage(null), 3000);
     }
   };
 
